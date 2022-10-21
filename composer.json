@@ -1,0 +1,13 @@
+{
+    "require": {
+      "ext-json": "*"
+    },
+    "require-dev": {
+        "php": ">=8.0",
+        "xpdo/xpdo": "^3.1"
+    },
+    "scripts": {
+        "build-schema": "vendor/bin/xpdo parse-schema mysql googledrivemediasource.mysql.schema.xml core/components/googledrivemediasource/src/ -v --update=1 --psr4=modmore\\\\GoogleDriveMediaSource",
+        "bootstrap": "php _bootstrap/index.php"
+    }
+}

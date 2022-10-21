@@ -1,0 +1,4 @@
+config.core.php
+core/components/googledrivemediasource/vendor/
+/vendor/
+.idea
