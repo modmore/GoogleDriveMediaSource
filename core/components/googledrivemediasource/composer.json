@@ -1,7 +1,9 @@
 {
     "require": {
         "php": ">=8.0",
-        "masbug/flysystem-google-drive-ext": "^2.2"
+        "masbug/flysystem-google-drive-ext": "dev-caching",
+        "psr/cache": "^3.0",
+        "modmore/revolution-cache": "^2.0"
     },
     "minimum-stability": "RC",
     "autoload": {
@@ -16,5 +18,11 @@
         "psr/http-client": "^1.0",
         "psr/http-message": "^1.0",
         "psr/http-factory": "^1.0"
-    }
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/Mark-H/flysystem-google-drive-ext"
+        }
+    ]
 }

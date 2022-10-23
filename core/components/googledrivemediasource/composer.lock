@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "502935c90095d8d6ebd122f6e0106b38",
+    "content-hash": "f50fd8775fba2593d2f7e73256239c7b",
     "packages": [
         {
             "name": "firebase/php-jwt",
@@ -242,15 +242,15 @@
         },
         {
             "name": "masbug/flysystem-google-drive-ext",
-            "version": "v2.2.2",
+            "version": "dev-caching",
             "source": {
                 "type": "git",
-                "url": "https://github.com/masbug/flysystem-google-drive-ext.git",
+                "url": "https://github.com/Mark-H/flysystem-google-drive-ext.git",
                 "reference": "3947d39be212bff9cea95b2a5252e52c9eb36cc0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/masbug/flysystem-google-drive-ext/zipball/3947d39be212bff9cea95b2a5252e52c9eb36cc0",
+                "url": "https://api.github.com/repos/Mark-H/flysystem-google-drive-ext/zipball/3947d39be212bff9cea95b2a5252e52c9eb36cc0",
                 "reference": "3947d39be212bff9cea95b2a5252e52c9eb36cc0",
                 "shasum": ""
             },
@@ -272,7 +272,6 @@
                     "Masbug\\Flysystem\\": "src"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "Apache-2.0"
             ],
@@ -288,17 +287,59 @@
             ],
             "description": "Flysystem adapter for Google Drive with seamless virtual<=>display path translation",
             "keywords": [
-                "Flysystem",
                 "extended",
+                "flysystem",
                 "google-drive",
                 "laravel",
                 "translated"
             ],
             "support": {
-                "issues": "https://github.com/masbug/flysystem-google-drive-ext/issues",
-                "source": "https://github.com/masbug/flysystem-google-drive-ext/tree/v2.2.2"
+                "source": "https://github.com/Mark-H/flysystem-google-drive-ext/tree/v2.2.2"
             },
             "time": "2022-06-24T06:43:42+00:00"
+        },
+        {
+            "name": "modmore/revolution-cache",
+            "version": "2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/modmore/RevolutionCache.git",
+                "reference": "db1ef23d6978dad37fd987d05bec9556dbf87711"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/modmore/RevolutionCache/zipball/db1ef23d6978dad37fd987d05bec9556dbf87711",
+                "reference": "db1ef23d6978dad37fd987d05bec9556dbf87711",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-pdo": "*",
+                "php": ">=8.0",
+                "psr/cache": "^3.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "modmore\\RevolutionCache\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Mark Hamstra",
+                    "email": "hello@markhamstra.com"
+                }
+            ],
+            "description": "A PSR-6 cache implementation to access the MODX Revolution Cache Provider.",
+            "support": {
+                "issues": "https://github.com/modmore/RevolutionCache/issues",
+                "source": "https://github.com/modmore/RevolutionCache/tree/2.0.0"
+            },
+            "time": "2022-10-22T21:59:23+00:00"
         },
         {
             "name": "monolog/monolog",
@@ -732,7 +773,9 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "RC",
-    "stability-flags": [],
+    "stability-flags": {
+        "masbug/flysystem-google-drive-ext": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
