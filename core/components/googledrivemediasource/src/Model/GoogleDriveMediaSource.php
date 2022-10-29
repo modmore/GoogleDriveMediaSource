@@ -107,7 +107,7 @@ class GoogleDriveMediaSource extends modMediaSource
             'clientId' => [
                 'name' => 'clientId',
                 'desc' => $this->xpdo->lexicon('googledrivemediasource.clientId_desc'),
-                'type' => 'textfield',
+                'type' => 'password',
                 'options' => '',
                 'value' => '',
 //                'lexicon' => 'googledrivemediasource:default',
@@ -148,6 +148,11 @@ class GoogleDriveMediaSource extends modMediaSource
     public function prepareProperties(array $properties = []): array
     {
         $oAuth = $this->oauth2($properties);
+
+        $properties['refreshToken']['desc'] = '<a href="' . $oAuth->buildFullAuthorizationUri() . '" class="x-btn primary-button">Authorize your Google Account</a>';
+        if ($oAuth->getAccessToken()) {
+            $properties['refreshToken']['desc'] = ' &check; Successfully authorized. To change accounts or re-connect: ' . $properties['refreshToken']['desc'];
+        }
 
         // Look for auth codes passed in
         if (isset($_REQUEST['code'])) {
@@ -204,8 +209,6 @@ class GoogleDriveMediaSource extends modMediaSource
             return parent::prepareProperties($properties);
         }
         unset($properties['root']);
-
-        $properties['refreshToken']['desc'] = '<a href="' . $oAuth->buildFullAuthorizationUri() . '" class="x-btn primary-button">Authorize your Google Account</a>';
 
         return parent::prepareProperties($properties);
     }
