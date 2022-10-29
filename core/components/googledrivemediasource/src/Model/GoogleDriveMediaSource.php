@@ -33,6 +33,13 @@ $logger = function($msg) use ($modx) {
 class GoogleDriveMediaSource extends modMediaSource
 {
     /**
+     * @var array|mixed|\xPDO\Om\xPDOObject|null
+     */
+    private static array $cacheOptions = [
+        xPDO::OPT_CACHE_KEY => 'googledrive',
+    ];
+
+    /**
      * @var ?Client
      */
     private ?Client $client = null;
@@ -48,7 +55,7 @@ class GoogleDriveMediaSource extends modMediaSource
         $client = $this->client();
         $drive = new Drive($client);
 
-        $cache = new Pool($this->xpdo, 'googledrive');
+        $cache = new Pool($this->xpdo, self::$cacheOptions[xPDO::OPT_CACHE_KEY]);
         $adapter = new DriveAdapter($drive, [
             'cache' => $cache,
             'root' => $properties['root']['value'] ?? '',
@@ -148,7 +155,7 @@ class GoogleDriveMediaSource extends modMediaSource
         }
 
         if (!$oAuth->getClientId() || !$oAuth->getClientSecret()) {
-            unset($properties['refreshToken'], $properties['otherOption']);
+            unset($properties['refreshToken']);
 
             return parent::prepareProperties($properties);
         }
@@ -209,16 +216,18 @@ class GoogleDriveMediaSource extends modMediaSource
             'scope' => 'https://www.googleapis.com/auth/drive',
             'tokenCredentialUri' => 'https://oauth2.googleapis.com/token',
             'authorizationUri' => 'https://accounts.google.com/o/oauth2/auth',
-            'redirectUri' => 'https://' . $this->xpdo->getOption('http_host') . $this->xpdo->getOption('manager_url') . '?a=source/update&id=' . $this->get('id'),
-//            'redirectUri' => 'https://mm-commerce.eu.ngrok.io' . $this->xpdo->getOption('manager_url') . '?a=source/update&id=' . $this->get('id'),
+//            'redirectUri' => 'https://' . $this->xpdo->getOption('http_host') . $this->xpdo->getOption('manager_url') . '?a=source/update&id=' . $this->get('id'),
+            'redirectUri' => 'https://mm-commerce.eu.ngrok.io' . $this->xpdo->getOption('manager_url') . '?a=source/update&id=' . $this->get('id'),
             'clientId' => $properties['clientId']['value'] ?? '',
             'clientSecret' => $properties['clientSecret']['value'] ?? '',
             'refreshToken' => $properties['refreshToken']['value'] ?? '',
         ]);
 
-        if ($tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'))) {
+        if ($tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'), self::$cacheOptions)) {
             $oAuth->updateToken($tokens);
         }
+
+        $oAuth->setRefreshToken($properties['refreshToken']['value'] ?? '');
 
         return $oAuth;
     }
@@ -234,8 +243,14 @@ class GoogleDriveMediaSource extends modMediaSource
             'client_id' => $oauth->getClientId(),
             'client_secret' => $oauth->getClientSecret(),
         ]);
-        if ($tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'))) {
+        if ($tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'), self::$cacheOptions)) {
             $this->client->setAccessToken($tokens);
+        }
+        else {
+            $tokens = $this->client->fetchAccessTokenWithRefreshToken($oauth->getRefreshToken());
+//            var_dump($tokens);exit();
+
+            $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens, $tokens['expires_in'] - 60, self::$cacheOptions);
         }
 
         return $this->client;
@@ -258,7 +273,7 @@ class GoogleDriveMediaSource extends modMediaSource
             }
 
             if (array_key_exists('access_token', $tokens)) {
-                $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens);
+                $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens, $tokens['expires_in'], self::$cacheOptions);
             }
 
         } catch (\Exception $e) {
