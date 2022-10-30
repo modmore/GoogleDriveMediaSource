@@ -25,8 +25,8 @@ use Psr\Cache\InvalidArgumentException;
 class DriveAdapter implements FilesystemAdapter
 {
     protected const DIRECTORY_MIME = 'application/vnd.google-apps.folder';
-    protected const LIST_FIELDS = 'files(id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey),nextPageToken';
-    protected const GET_FIELDS = 'id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey';
+    protected const LIST_FIELDS = 'files(id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension),nextPageToken';
+    protected const GET_FIELDS = 'id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension';
 
     private Drive $drive;
     private ?CacheItemPoolInterface $cache = null;
@@ -34,6 +34,7 @@ class DriveAdapter implements FilesystemAdapter
     private int $maxItemsPerLevel = 250;
 
     private array $memoryCache = [];
+    private File|Directory|null $lastObj = null;
 
     public function __construct(Drive $drive, array $config = [])
     {
@@ -70,7 +71,10 @@ class DriveAdapter implements FilesystemAdapter
 
         $item = $this->cache ? $this->cache->getItem($fileId) : false;
         if ($item && $item->isHit()) {
-            return CacheableTrait::fromCacheArray($item->get());
+            $obj = CacheableTrait::fromCacheArray($item->get());
+            $this->memoryCache[$obj->getId()] = $obj;
+            $this->lastObj = $obj;
+            return $obj;
         }
 
         try {
@@ -86,7 +90,8 @@ class DriveAdapter implements FilesystemAdapter
             $this->cache->save($item);
         }
         $this->memoryCache[$obj->getId()] = $obj;
-        
+
+        $this->lastObj = $obj;
         return $obj;
     }
 
@@ -257,6 +262,7 @@ class DriveAdapter implements FilesystemAdapter
         if (!$obj) {
             throw new UnableToWriteFile(print_r($obj, true));
         }
+        $this->lastObj = $this->convertToFile($obj);
         if ($this->cache) {
             $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
             if ($srcFile) {
@@ -327,6 +333,7 @@ class DriveAdapter implements FilesystemAdapter
         if (!$result = $this->drive->files->update($item->getId(), $file)) {
             throw UnableToDeleteFile::atLocation($path, 'Received error marking item as trashed: ' . print_r($result, true));
         }
+        $this->lastObj = $item;
         if ($this->cache) {
             $this->cache->deleteItem($item->getId());
             $this->cache->deleteItem($item->getId() . '_content');
@@ -361,6 +368,7 @@ class DriveAdapter implements FilesystemAdapter
         if (!$result = $this->drive->files->update($item->getId(), $file)) {
             throw UnableToDeleteDirectory::atLocation($path, 'Received error marking item as trashed: ' . print_r($result, true));
         }
+        $this->lastObj = $item;
         if ($this->cache) {
             $this->cache->deleteItem($item->getId());
             // Remove relevant parent listings from the cache
@@ -389,6 +397,7 @@ class DriveAdapter implements FilesystemAdapter
             throw new UnableToCreateDirectory(print_r($obj, true));
         }
 
+        $this->lastObj = $this->convertToFile($obj);
         // Delete the directory listing of the parent from cache
         if ($this->cache) {
             $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
@@ -549,6 +558,18 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         return new File($file, $path);
+    }
+
+    /**
+     * Returns the last file or directory that was created/read/updated/deleted.
+     *
+     * Useful to get the ID (path) of a new file, for example.
+     *
+     * @return Directory|File|null
+     */
+    public function getLastItem(): File|Directory|null
+    {
+        return $this->lastObj;
     }
 
 }
