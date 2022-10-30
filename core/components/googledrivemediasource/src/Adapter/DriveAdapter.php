@@ -2,6 +2,7 @@
 
 namespace modmore\GoogleDriveMediaSource\Adapter;
 
+use Google\Exception;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use GuzzleHttp\Psr7\Utils;
@@ -442,7 +443,40 @@ class DriveAdapter implements FilesystemAdapter
 
     public function move(string $source, string $destination, Config $config): void
     {
-        // TODO: Implement move() method.
+        try {
+            $sourceFile = $this->get($source);
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata) {
+            throw new UnableToMoveFile('Source file does not exist');
+        }
+        try {
+            $segments = explode('/', $destination);
+            array_pop($segments);
+            $destination = (string)end($segments);
+            if (empty($destination)) {
+                $destination = $this->root;
+            }
+            $targetParent = $this->get($destination);
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata) {
+            throw new UnableToMoveFile('Target parent ' . $destination . ' does not exist');
+        }
+
+        try {
+            $this->drive->files->update($sourceFile->getId(), new DriveFile(), [
+                'addParents' => $targetParent->getId(),
+                'removeParents' => implode(',', $sourceFile->file->getParents()),
+            ]);
+        } catch (Exception $e) {
+            throw new UnableToMoveFile($e->getMessage());
+        }
+
+        // Delete the directory listing cache of the item and both parents
+        if ($this->cache) {
+            $this->cache->deleteItem($sourceFile->getId());
+            $this->cache->deleteItem('DIR-' . $this->root . '-' . $targetParent->getId());
+            foreach ($sourceFile->file->getParents() as $parent) {
+                $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
+            }
+        }
     }
 
     public function copy(string $source, string $destination, Config $config): void
