@@ -16,6 +16,7 @@ use League\Flysystem\UnableToDeleteDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToMoveFile;
 use League\Flysystem\UnableToRetrieveMetadata;
+use League\Flysystem\UnableToSetVisibility;
 use League\Flysystem\UnableToWriteFile;
 use League\MimeTypeDetection\FinfoMimeTypeDetector;
 use Psr\Cache\CacheItemPoolInterface;
@@ -31,6 +32,8 @@ class DriveAdapter implements FilesystemAdapter
     private ?CacheItemPoolInterface $cache = null;
     private string $root;
     private int $maxItemsPerLevel = 250;
+
+    private array $memoryCache = [];
 
     public function __construct(Drive $drive, array $config = [])
     {
@@ -57,6 +60,10 @@ class DriveAdapter implements FilesystemAdapter
         $segments = explode('/', trim($path, '/'));
         $fileId = end($segments);
 
+        if (isset($this->memoryCache[$fileId])) {
+            return $this->memoryCache[$fileId];
+        }
+
         $params = [
             'fields' => self::GET_FIELDS,
         ];
@@ -71,15 +78,16 @@ class DriveAdapter implements FilesystemAdapter
         } catch (\Exception $e) {
             throw new UnableToRetrieveMetadata($e->getMessage());
         }
-        
+
+        $obj = $this->convertToFile($file);
         if ($this->cache && $item) {
-            $obj = $this->convertToFile($file);
             $item->set($obj->toCacheArray());
             $item->expiresAfter(new \DateInterval('PT5M'));
             $this->cache->save($item);
         }
+        $this->memoryCache[$obj->getId()] = $obj;
         
-        return $this->convertToFile($file);
+        return $obj;
     }
 
     /**
@@ -240,6 +248,7 @@ class DriveAdapter implements FilesystemAdapter
 
         if ($srcFile) {
             $obj = $this->drive->files->update($srcFile->getId(), $file, $params);
+            unset($this->memoryCache[$srcFile->getId()]);
         }
         else {
             $obj = $this->drive->files->create($file, $params);
@@ -310,6 +319,7 @@ class DriveAdapter implements FilesystemAdapter
             throw UnableToDeleteFile::atLocation($path, 'Provided path is a file, not a directory.');
         }
 
+        unset($this->memoryCache[$item->getId()]);
 
         $file = new DriveFile();
         $file->setTrashed(true);
@@ -341,8 +351,9 @@ class DriveAdapter implements FilesystemAdapter
         }
         if ($item instanceof File) {
             throw UnableToDeleteDirectory::atLocation($path, 'Provided path is a file, not a directory.');
-
         }
+
+        unset($this->memoryCache[$item->getId()]);
 
         $file = new DriveFile();
         $file->setTrashed(true);
@@ -381,12 +392,13 @@ class DriveAdapter implements FilesystemAdapter
         // Delete the directory listing of the parent from cache
         if ($this->cache) {
             $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
+            unset($this->memoryCache[$parent]);
         }
     }
 
     public function setVisibility(string $path, string $visibility): void
     {
-        // TODO: Implement setVisibility() method.
+        throw new UnableToSetVisibility('Setting visibility is not supported by this driver.');
     }
 
     public function visibility(string $path): File
@@ -471,6 +483,8 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         // Delete the directory listing cache of the item and both parents
+        unset($this->memoryCache[$sourceFile->getId()], $this->memoryCache[$targetParent->getId()]);
+
         if ($this->cache) {
             $this->cache->deleteItem($sourceFile->getId());
             $this->cache->deleteItem('DIR-' . $this->root . '-' . $targetParent->getId());
@@ -508,6 +522,7 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         // Delete the directory listing cache of the item and both parents
+        unset($this->memoryCache[$targetParent->getId()]);
         if ($this->cache) {
             $this->cache->deleteItem('DIR-' . $this->root . '-' . $targetParent->getId());
         }
