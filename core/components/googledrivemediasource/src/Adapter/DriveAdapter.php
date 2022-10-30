@@ -10,6 +10,7 @@ use League\Flysystem\Config;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\StorageAttributes;
+use League\Flysystem\UnableToCopyFile;
 use League\Flysystem\UnableToCreateDirectory;
 use League\Flysystem\UnableToDeleteDirectory;
 use League\Flysystem\UnableToDeleteFile;
@@ -481,7 +482,35 @@ class DriveAdapter implements FilesystemAdapter
 
     public function copy(string $source, string $destination, Config $config): void
     {
-        // TODO: Implement copy() method.
+        try {
+            $sourceFile = $this->get($source);
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata) {
+            throw new UnableToCopyFile('Source file does not exist');
+        }
+        try {
+            $segments = explode('/', $destination);
+            array_pop($segments);
+            $destination = (string)end($segments);
+            if (empty($destination)) {
+                $destination = $this->root;
+            }
+            $targetParent = $this->get($destination);
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata) {
+            throw new UnableToCopyFile('Target parent ' . $destination . ' does not exist');
+        }
+
+        $newFile = new DriveFile();
+        $newFile->setParents([$targetParent->getId()]);
+        try {
+            $this->drive->files->copy($sourceFile->getId(), $newFile);
+        } catch (Exception $e) {
+            throw new UnableToCopyFile($e->getMessage());
+        }
+
+        // Delete the directory listing cache of the item and both parents
+        if ($this->cache) {
+            $this->cache->deleteItem('DIR-' . $this->root . '-' . $targetParent->getId());
+        }
     }
 
     /**
