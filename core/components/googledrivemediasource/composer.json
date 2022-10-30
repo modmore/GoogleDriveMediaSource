@@ -3,7 +3,8 @@
         "php": ">=8.0",
         "masbug/flysystem-google-drive-ext": "dev-caching",
         "psr/cache": "^3.0",
-        "modmore/revolution-cache": "^2.0"
+        "modmore/revolution-cache": "^2.0",
+        "league/mime-type-detection": "^1.11"
     },
     "minimum-stability": "RC",
     "autoload": {

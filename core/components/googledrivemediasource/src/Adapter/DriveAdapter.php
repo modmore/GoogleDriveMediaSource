@@ -4,11 +4,18 @@ namespace modmore\GoogleDriveMediaSource\Adapter;
 
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
+use GuzzleHttp\Psr7\Utils;
 use League\Flysystem\Config;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\StorageAttributes;
+use League\Flysystem\UnableToCreateDirectory;
+use League\Flysystem\UnableToDeleteDirectory;
+use League\Flysystem\UnableToDeleteFile;
+use League\Flysystem\UnableToMoveFile;
 use League\Flysystem\UnableToRetrieveMetadata;
+use League\Flysystem\UnableToWriteFile;
+use League\MimeTypeDetection\FinfoMimeTypeDetector;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 
@@ -37,6 +44,12 @@ class DriveAdapter implements FilesystemAdapter
         }
     }
 
+    /**
+     * @param string $path
+     * @return File|Directory
+     * @throws UnableToRetrieveMetadata
+     * @throws InvalidArgumentException
+     */
     public function get(string $path): File|Directory
     {
         $segments = explode('/', trim($path, '/'));
@@ -74,7 +87,7 @@ class DriveAdapter implements FilesystemAdapter
      * @throws InvalidArgumentException
      * @throws UnableToRetrieveMetadata
      */
-    public function list(string $path, string $query = ''): array
+    public function list(string $path): array
     {
         global $logger;
         $segments = explode('/', $path);
@@ -86,10 +99,10 @@ class DriveAdapter implements FilesystemAdapter
         $logger($parent);
 
 
-        $cacheKey = '-list-' . $this->root . '-' . str_replace('/', '_', $path);
-        if (empty($query)) {
-            $cacheKey .= sha1($query);
-        }
+        $cacheKey = 'DIR-' . $this->root . '-' . $parent;
+//        if (empty($query)) {
+//            $cacheKey .= sha1($query);
+//        }
 
         $item = $this->cache ? $this->cache->getItem($cacheKey) : false;
         if ($item && $item->isHit()) {
@@ -102,7 +115,7 @@ class DriveAdapter implements FilesystemAdapter
             return $results;
         }
 
-        $results = $this->fetchList($parent, $query);
+        $results = $this->fetchList($parent);
         if ($item) {
             $cache = [];
             foreach ($results as $obj) {
@@ -170,18 +183,76 @@ class DriveAdapter implements FilesystemAdapter
 
     public function fileExists(string $path): bool
     {
-        // TODO: Implement fileExists() method.
-        return $this->get($path) instanceof StorageAttributes;
+        try {
+            return $this->get($path) instanceof StorageAttributes;
+        } catch (UnableToRetrieveMetadata) {
+            return false;
+        }
     }
 
     public function write(string $path, string $contents, Config $config): void
     {
-        // TODO: Implement write() method.
+        $this->upload($path, $contents);
     }
 
     public function writeStream(string $path, $contents, Config $config): void
     {
-        // TODO: Implement writeStream() method.
+        $this->upload($path, $contents);
+    }
+
+    protected function upload(string $path, mixed $contents)
+    {
+        $segments = explode('/', trim($path, '/'));
+        $name = array_pop($segments);
+        $parent = end($segments) ?: $this->root;
+
+
+        $srcFile = null;
+        try {
+            $srcFile = $this->get($path);
+            if ($srcFile instanceof Directory) {
+                $srcFile = null;
+            }
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata) {
+        }
+
+        $stream = Utils::streamFor($contents);
+        $size = $stream->getSize();
+
+        $file = new DriveFile();
+        if (!$srcFile) {
+            $file->setName($name);
+            $file->setParents([$parent]);
+
+            $detector = new FinfoMimeTypeDetector();
+            $mime = $detector->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+            $file->setMimeType($mime);
+        }
+
+
+        $params = [
+            'data' => $stream,
+            'uploadType' => 'media',
+            'fields' => self::GET_FIELDS
+        ];
+
+        if ($srcFile) {
+            $obj = $this->drive->files->update($srcFile->getId(), $file, $params);
+        }
+        else {
+            $obj = $this->drive->files->create($file, $params);
+        }
+
+        if (!$obj) {
+            throw new UnableToWriteFile(print_r($obj, true));
+        }
+        if ($this->cache) {
+            $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
+            if ($srcFile) {
+                $this->cache->deleteItem($srcFile->getId());
+                $this->cache->deleteItem($srcFile->getId() . '_content');
+            }
+        }
     }
 
     public function read(string $path): string
@@ -191,34 +262,124 @@ class DriveAdapter implements FilesystemAdapter
             throw new UnableToRetrieveMetadata('Does not exist or is not a file');
         }
 
+        $cacheKey = $file->getId() . '_content';
+        $item = $this->cache ? $this->cache->getItem($cacheKey) : false;
+        if ($item && $item->isHit()) {
+            return base64_decode($item->get());
+        }
+
         $response = $this->drive->files->get($file->getId(), [
             'alt' => 'media',
         ]);
 
         if ($response) {
-            return (string)$response->getBody();
+            $body = (string)$response->getBody();
+            if ($item && $this->cache) {
+                $item->set(base64_encode($body));
+                $item->expiresAfter(new \DateInterval('PT1M'));
+                $this->cache->save($item);
+            }
+            return $body;
         }
-        return 'empty';
+        return '';
     }
 
     public function readStream(string $path)
     {
-        // TODO: Implement readStream() method.
+        // @todo make this an actual streaming implementation that streams directly from Drive
+        $content = $this->read($path);
+        $stream = fopen('php://memory','rb+');
+        fwrite($stream, $content);
+        rewind($stream);
+        return $stream;
     }
 
     public function delete(string $path): void
     {
-        // TODO: Implement delete() method.
+        if (empty($path) || $path === $this->root) {
+            throw UnableToDeleteFile::atLocation($path, 'Unable to delete root');
+        }
+        try {
+            $item = $this->get($path);
+        } catch (UnableToRetrieveMetadata) {
+            throw UnableToDeleteFile::atLocation($path, 'File or directory does not exist');
+        }
+        if ($item instanceof Directory) {
+            throw UnableToDeleteFile::atLocation($path, 'Provided path is a file, not a directory.');
+        }
+
+
+        $file = new DriveFile();
+        $file->setTrashed(true);
+
+        if (!$result = $this->drive->files->update($item->getId(), $file)) {
+            throw UnableToDeleteFile::atLocation($path, 'Received error marking item as trashed: ' . print_r($result, true));
+        }
+        if ($this->cache) {
+            $this->cache->deleteItem($item->getId());
+            $this->cache->deleteItem($item->getId() . '_content');
+
+            // Remove relevant parent listings from the cache
+            foreach ($item->file->getParents() as $parentId) {
+                $this->cache->deleteItem('DIR-' . $this->root . '-' . $parentId);
+            }
+        }
+
     }
 
     public function deleteDirectory(string $path): void
     {
-        // TODO: Implement deleteDirectory() method.
+        if (empty($path) || $path === $this->root) {
+            throw UnableToDeleteDirectory::atLocation($path, 'Unable to delete root');
+        }
+        try {
+            $item = $this->get($path);
+        } catch (UnableToRetrieveMetadata) {
+            throw UnableToDeleteDirectory::atLocation($path, 'File or directory does not exist');
+        }
+        if ($item instanceof File) {
+            throw UnableToDeleteDirectory::atLocation($path, 'Provided path is a file, not a directory.');
+
+        }
+
+        $file = new DriveFile();
+        $file->setTrashed(true);
+
+        if (!$result = $this->drive->files->update($item->getId(), $file)) {
+            throw UnableToDeleteDirectory::atLocation($path, 'Received error marking item as trashed: ' . print_r($result, true));
+        }
+        if ($this->cache) {
+            $this->cache->deleteItem($item->getId());
+            // Remove relevant parent listings from the cache
+            foreach ($item->file->getParents() as $parentId) {
+                $this->cache->deleteItem('DIR-' . $this->root . '-' . $parentId);
+            }
+        }
     }
 
     public function createDirectory(string $path, Config $config): void
     {
-        // TODO: Implement createDirectory() method.
+        $segments = explode('/', trim($path, '/'));
+        $name = array_pop($segments);
+        $parent = end($segments) ?: $this->root;
+
+        $file = new DriveFile();
+        $file->setName($name);
+        $file->setParents([$parent]);
+        $file->setMimeType('application/vnd.google-apps.folder');
+
+        $obj = $this->drive->files->create($file, [
+            'fields' => self::GET_FIELDS
+        ]);
+
+        if (!$obj->getId()) {
+            throw new UnableToCreateDirectory(print_r($obj, true));
+        }
+
+        // Delete the directory listing of the parent from cache
+        if ($this->cache) {
+            $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
+        }
     }
 
     public function setVisibility(string $path, string $visibility): void
@@ -297,8 +458,6 @@ class DriveAdapter implements FilesystemAdapter
     private function convertToFile(DriveFile $file, string $parent = 'root'): File|Directory
     {
         $path = ($parent !== 'root' ? $parent . '/' : '') . $file->getId();
-        global $logger;
-        $logger($path . ' = ' . $file->getMimeType() . ' or ' . $file->getKind());
 
         // In a search, directories appear with a mime type
         if ($file->getMimeType() === self::DIRECTORY_MIME) {
@@ -307,7 +466,6 @@ class DriveAdapter implements FilesystemAdapter
         // In a simple get by ID, they appear just with a different kind
         // and lack an ID
         if ($file->getKind() === 'drive#fileList') {
-            $logger('setting id to ' . $parent);
             $file->id = $parent;
             return new Directory($file, $path);
         }

@@ -11,6 +11,7 @@ use League\Flysystem\Visibility;
 use modmore\GoogleDriveMediaSource\Adapter\Directory;
 use modmore\GoogleDriveMediaSource\Adapter\DriveAdapter;
 use modmore\GoogleDriveMediaSource\Adapter\File;
+use modmore\GoogleDriveMediaSource\Processors\FilePreview;
 use modmore\RevolutionCache\Pool;
 use MODX\Revolution\modX;
 use MODX\Revolution\Sources\modMediaSource;
@@ -340,8 +341,6 @@ class GoogleDriveMediaSource extends modMediaSource
                 $id = $object->getId();
                 $name = $object->getName();
 
-                $this->xpdo->log(1, print_r($object->toCacheArray(), true));
-
                 if ($object instanceof Directory) {
                     $cls = $this->getExtJSDirClasses();
                     $dirNames[] = strtoupper($name);
@@ -456,24 +455,142 @@ class GoogleDriveMediaSource extends modMediaSource
         ];
 
         $file_list['menu'] = [
-            'items' => $this->getListFileContextMenu($path, !empty($page), $file_list),
+            'items' => $this->getFileMenu($file),
         ];
 
-        // trough tree config we can request a tree without image-preview tooltips, don't do any work if not necessary
-        if (!$properties['hideTooltips']) {
-            $file_list['qtip'] = '';
-            if ($this->isFileImage($path, $imageExtensions)) {
-                $imageWidth = $this->ctx->getOption('filemanager_image_width', 400);
-                $imageHeight = $this->ctx->getOption('filemanager_image_height', 300);
-                $preview_image = $this->buildManagerImagePreview($path, $ext, $imageWidth, $imageHeight, $bases, $properties);
-//                $file_list['qtip'] = '<img src="' . $preview_image['src'] . '" width="' . $preview_image['width'] . '" height="' . $preview_image['height'] . '" alt="' . $path . '" />';
-            }
+
+        $file_list['qtip'] = '';
+
+
+        $mime = $file->mimeType();
+        if (str_starts_with($mime, 'image/')) {
+            $width = $this->ctx->getOption('filemanager_image_width', 400);
+            $height = $this->ctx->getOption('filemanager_image_height', 300);
+
+            $preview = $this->buildManagerImagePreview($file->path(), $mime, $width, $height, $bases);
+
+            $file_list['qtip'] = '<img src="' . $preview['src'] . '" width="' . $preview['width'] . '" height="' . $preview['height'] . '" alt="' . htmlentities($file->getName()) . '" />';
         }
 
         return $file_list;
     }
 
+    public function getObjectContents($path)
+    {
+        $a = parent::getObjectContents($path);
 
+        if (!empty($a)) {
+            $file = $this->adapter->get($path);
+            $a['basename'] = $file->getName();
+            $a['name'] = $file->getName();
+        }
+
+        return $a;
+    }
+
+    protected function getFileMenu(File $file)
+    {
+        $canSave = $this->checkPolicy('save');
+        $canRemove = $this->checkPolicy('remove');
+        $canView = $this->checkPolicy('view');
+        $canOpen = !empty($data['urlExternal']) &&
+            (empty($data['visibility']) || $data['visibility'] === Visibility::PUBLIC);
+
+        $menu = [];
+
+        if ($canView && $file->file->webViewLink) {
+            $menu[] = [
+                'text' => 'Open in Google Drive',
+                // @todo figure out how to set a custom handler correctly
+//                'handler' => "function a () { console.log(document); }",
+//                'handler' => 'function openDrive () { window.open("' . $file->file->webViewLink . '"); }'
+            ];
+            $menu[] = '-';
+        }
+
+
+        $mime = $file->mimeType();
+        $editable = !$this->isFileBinary($file->getId());
+
+        if ($this->hasPermission('file_update') && $canSave) {
+            if ($editable) {
+                $menu[] = [
+                    'text' => $this->xpdo->lexicon('file_edit'),
+                    'handler' => 'this.editFile',
+                ];
+                $menu[] = [
+                    'text' => $this->xpdo->lexicon('quick_update_file'),
+                    'handler' => 'this.quickUpdateFile',
+                ];
+            }
+            $menu[] = [
+                'text' => $this->xpdo->lexicon('file_rename'),
+                'handler' => 'this.renameFile',
+            ];
+        }
+
+        $canDownload = $this->hasPermission('file_view')
+            && $canView
+            && !str_starts_with($mime, 'application/vnd.google-apps');
+        if ($canDownload) {
+            $menu[] = [
+                'text' => $this->xpdo->lexicon('file_download'),
+                'handler' => 'this.downloadFile',
+            ];
+        }
+
+        if ($mime === 'application/vnd.google-apps.document') {
+            $menu[] = [
+                'text' => 'Download as PDF', // application/pdf
+                // @todo handler
+            ];
+            $menu[] = [
+                'text' => 'Download as MS Word', // application/vnd.openxmlformats-officedocument.wordprocessingml.document
+                // @todo handler
+            ];
+        }
+        elseif ($mime === 'application/vnd.google-apps.spreadsheet') {
+            $menu[] = [
+                'text' => 'Download as PDF', // application/pdf
+                // @todo handler
+            ];
+            $menu[] = [
+                'text' => 'Download as MS Excel', // application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+                // @todo handler
+            ];
+        }
+        elseif ($mime === 'application/vnd.google-apps.presentation') {
+            $menu[] = [
+                'text' => 'Download as PDF', // application/pdf
+                // @todo handler
+            ];
+            $menu[] = [
+                'text' => 'Download as MS PowerPoint', // application/vnd.openxmlformats-officedocument.presentationml.presentation
+                // @todo handler
+            ];
+        }
+
+
+        if ($this->hasPermission('file_view') && $canOpen) {
+            $menu[] = [
+                'text' => $this->xpdo->lexicon('file_copy_path'),
+                'handler' => 'this.copyRelativePath',
+            ];
+            $menu[] = [
+                'text' => $this->xpdo->lexicon('file_open'),
+                'handler' => 'this.openFile',
+            ];
+        }
+        if ($this->hasPermission('file_remove') && $canRemove) {
+            $menu[] = '-';
+            $menu[] = [
+                'text' => $this->xpdo->lexicon('file_remove'),
+                'handler' => 'this.removeFile',
+            ];
+        }
+
+        return $menu;
+    }
     protected function getImageDimensions($path, $ext): bool|array
     {
         try {
@@ -494,28 +611,50 @@ class GoogleDriveMediaSource extends modMediaSource
         return false;
     }
 
-    protected function buildManagerImagePreview($path, $ext, $width, $height, $bases, $properties = [])
+    protected function buildManagerImagePreview($path, $ext, $width, $height, $bases, $properties = []): array
     {
         $file = $this->adapter->get($path);
 
-        $imageQuery = http_build_query([
-            'src' => rawurlencode($path),
-            'w' => 400,
-//            'h' => $imageQueryHeight,
-            'HTTP_MODAUTH' => $this->xpdo->user->getUserToken($this->xpdo->context->get('key')),
-            'f' => $this->getOption('thumbnailType', $properties, 'png'),
-            'q' => $this->getOption('thumbnailQuality', $properties, 90),
-            'wctx' => $this->ctx->get('key'),
+        $previewUrl = $this->xpdo->getOption('googledrivemediasource.assets_url', null, MODX_ASSETS_URL . 'components/googledrivemediasource/');
+        $previewUrl .= 'connector.php?';
+        $previewUrl .= http_build_query([
+            'action' => FilePreview::class,
             'source' => $this->get('id'),
-            't' => $timestamp,
-            'ar' => 'x'
+            'file' => $file->getId(),
+            'wctx' => 'mgr',
+            'HTTP_MODAUTH' => $this->xpdo->user->getUserToken('mgr'),
         ]);
-        $image = $this->ctx->getOption('connectors_url', MODX_CONNECTORS_URL) . 'system/phpthumb.php?' . $imageQuery;
 
         return [
-            'src' => $image,
+            'src' => $previewUrl,
             'width' => $width,
             'height' => $height,
         ];
+    }
+
+    public function getDriveFile(string $path): File|Directory
+    {
+        return $this->adapter->get($path);
+    }
+
+
+    protected function getListFileContextMenu($path, $editable = true, $data = [], )
+    {
+        // Make sure this inherited method isn't accidentally called anywhere else
+        return [];
+    }
+
+    /**
+     * Overridden method because otherwise it avoids extension-less files from being deleted
+     * or renamed/removed. As Drive is essentially a static host, allow anything.
+     *
+     * @todo Consider implementing alternate checks in writing methods to still offer some security
+     *
+     * @param $filename
+     * @return bool
+     */
+    protected function checkFileType($filename): bool
+    {
+        return true;
     }
 }
