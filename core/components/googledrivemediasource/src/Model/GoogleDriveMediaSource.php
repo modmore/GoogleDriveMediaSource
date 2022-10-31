@@ -463,6 +463,80 @@ class GoogleDriveMediaSource extends modMediaSource
 
         return $file_list;
     }
+    protected function buildFileBrowserViewList($path, $ext, $image_extensions, $bases, $properties)
+    {
+        $file = $this->adapter->get($path);
+
+        $editAction = $this->getEditActionId();
+
+        $page = null;
+        if (!$this->isFileBinary($path)) {
+            $page = !empty($editAction)
+                ? '?a=' . $editAction . '&file=' . $path . '&wctx=' . $this->ctx->get('key') . '&source=' . $this->get('id')
+                : null;
+        }
+
+        $width = $this->ctx->getOption('filemanager_image_width', 800);
+        $height = $this->ctx->getOption('filemanager_image_height', 600);
+        $original = $preview_image_info = [
+            'width' => $width,
+            'height' => $height,
+        ];
+
+        $thumb_width = $this->ctx->getOption('filemanager_thumb_width', 100);
+        $thumb_height = $this->ctx->getOption('filemanager_thumb_height', 80);
+        $thumb_image_info = [
+            'width' => $thumb_width,
+            'height' => $thumb_height,
+        ];
+
+        $mime = $file->mimeType();
+        $preview = 0;
+        if ($this->isFileImage($path, $image_extensions)) {
+            $preview = 1;
+            $preview_image_info = $this->buildManagerImagePreview($path, $ext, $width, $height, $bases, $properties);
+            $thumb_image_info = $this->buildManagerImagePreview($path, $ext, $thumb_width, $thumb_height, $bases, $properties);
+            $original = $this->getImageDimensions($path, $ext);
+        }
+
+        $lastmod = $file->lastModified();
+        $size = $file->fileSize();
+
+        $file_list = [
+            'id' => $file->getId(),
+            'sid' => $this->get('id'),
+            'name' => $file->getName(),
+            'cls' => 'icon-' . $this->_fileIcon((string)$file->file->fileExtension, (string)$mime),
+            'original_width' => $original['width'],
+            'original_height' => $original['height'],
+            // preview
+            'preview' => $preview,
+            'image' => $preview_image_info['src'] ?? '',
+            'image_width' => $preview_image_info['width'],
+            'image_height' => $preview_image_info['height'],
+            // thumb
+            'thumb' => $thumb_image_info['src'] ?? '',
+            'thumb_width' => $thumb_image_info['width'],
+            'thumb_height' => $thumb_image_info['height'],
+
+            'url' => $path,
+            'relativeUrl' => ltrim($path, DIRECTORY_SEPARATOR),
+            'fullRelativeUrl' => rtrim($bases['url']) . ltrim($path, DIRECTORY_SEPARATOR),
+            'ext' => $ext,
+            'pathname' => $path,
+            'pathRelative' => rawurlencode($path),
+
+            'lastmod' => $lastmod,
+            'disabled' => false,
+            'visibility' => $file->visibility(),
+            'leaf' => true,
+            'page' => $page,
+            'size' => $size,
+            'menu' => $this->getFileMenu($file),
+        ];
+
+        return $file_list;
+    }
 
     public function getObjectContents($path)
     {
