@@ -107,14 +107,11 @@ class DriveAdapter implements FilesystemAdapter
      */
     public function list(string $path): array
     {
-        global $logger;
         $segments = explode('/', $path);
         $parent = end($segments) ?: 'root';
         if ($parent === 'root' || empty($parent)) {
             $parent = $this->root;
         }
-
-        $logger($parent);
 
         // Load the parent to ensure it is accessible and restricted to root
         $this->get($parent);
@@ -478,7 +475,7 @@ class DriveAdapter implements FilesystemAdapter
         }
         try {
             $segments = explode('/', $destination);
-            array_pop($segments);
+            $filename = array_pop($segments);
             $destination = (string)end($segments);
             if (empty($destination)) {
                 $destination = $this->root;
@@ -488,11 +485,21 @@ class DriveAdapter implements FilesystemAdapter
             throw new UnableToMoveFile('Target parent ' . $destination . ' does not exist');
         }
 
+        $patchObj = new DriveFile();
+        $params = [];
+
+        // Moving a file to a different container
+        if (!in_array($targetParent->getId(), $sourceFile->file->parents, true)) {
+            $params['addParents'] = $targetParent->getId();
+            $parent['removeParents'] = implode(',', $sourceFile->file->getParents());
+        }
+        // Renaming a file - even tho the *name* (id) doesn't change
+        if ($filename !== $sourceFile->getName() && $filename !== $sourceFile->getId()) {
+            $patchObj->setName($filename);
+        }
+
         try {
-            $this->drive->files->update($sourceFile->getId(), new DriveFile(), [
-                'addParents' => $targetParent->getId(),
-                'removeParents' => implode(',', $sourceFile->file->getParents()),
-            ]);
+            $this->drive->files->update($sourceFile->getId(), $patchObj, $params );
         } catch (Exception $e) {
             throw new UnableToMoveFile($e->getMessage());
         }
