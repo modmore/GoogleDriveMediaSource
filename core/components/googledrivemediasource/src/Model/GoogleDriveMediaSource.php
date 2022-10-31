@@ -366,18 +366,7 @@ class GoogleDriveMediaSource extends modMediaSource
 
                 }
                 elseif ($object instanceof File) {
-                    // @TODO review/refactor extension and mime_type would be better for filesystems that
-                    // may not always have an extension on it. For example would be S3 and you have an HTML file
-                    // but the name is just myPage - $this->filesystem->getMimetype($object['path']);
-                    $ext = pathinfo($name, PATHINFO_EXTENSION);
-                    $ext = $properties['use_multibyte']
-                        ? mb_strtolower($ext, $properties['modx_charset'])
-                        : strtolower($ext);
-                    if (!empty($allowedExtensions) && !in_array($ext, $allowedExtensions)) {
-                        continue;
-                    }
-                    $fileNames[] = strtoupper($id);
-                    $files[$id] = $this->_buildFileList($object, $ext, $imageExtensions, $bases, $properties);
+                    $files[$id] = $this->_buildFileList($object, '', $imageExtensions, $bases, $properties);
                 }
             }
 
@@ -411,7 +400,8 @@ class GoogleDriveMediaSource extends modMediaSource
         $canSave = $this->checkPolicy('save');
         $canRemove = $this->checkPolicy('remove');
         $driveCapabilities = $file->file->getCapabilities();
-        $id = rawurlencode(htmlspecialchars_decode($path));
+        $id = $file->getId();
+        $mime = $file->mimeType();
 
         $cls = [];
 
@@ -440,7 +430,7 @@ class GoogleDriveMediaSource extends modMediaSource
             'sid' => $this->get('id'),
             'text' => $file->getName(),
             'cls' => implode(' ', $cls),
-            'iconCls' => 'icon icon-file icon-' . $ext,
+            'iconCls' => 'icon icon-file icon-' . $this->_fileIcon((string)$file->file->fileExtension, (string)$mime),
             'type' => 'file',
             'leaf' => true,
             'page' => $page,
@@ -462,7 +452,6 @@ class GoogleDriveMediaSource extends modMediaSource
         $file_list['qtip'] = '';
 
 
-        $mime = $file->mimeType();
         if (str_starts_with($mime, 'image/')) {
             $width = $this->ctx->getOption('filemanager_image_width', 400);
             $height = $this->ctx->getOption('filemanager_image_height', 300);
@@ -656,5 +645,23 @@ class GoogleDriveMediaSource extends modMediaSource
     protected function checkFileType($filename): bool
     {
         return true;
+    }
+
+    private function _fileIcon(string $fileExtension, ?string $mime = '')
+    {
+        if (!empty($fileExtension)) {
+            return $fileExtension;
+        }
+
+        return match ($mime) {
+            'application/vnd.google-apps.document' => 'docx',
+//            'application/vnd.google-apps.drive-sdk', 'application/vnd.google-apps.shortcut' => 'drive-shortcut',
+//            'application/vnd.google-apps.form' => 'drive-form',
+//            'application/vnd.google-apps.map' => 'drive-map',
+            'application/vnd.google-apps.photo' => 'png',
+            'application/vnd.google-apps.presentation' => 'ppt',
+            'application/vnd.google-apps.spreadsheet' => 'xls',
+            default => 'unknown',
+        };
     }
 }
