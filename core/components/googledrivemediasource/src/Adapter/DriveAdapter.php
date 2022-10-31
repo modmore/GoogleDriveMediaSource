@@ -35,6 +35,7 @@ class DriveAdapter implements FilesystemAdapter
 
     private array $memoryCache = [];
     private File|Directory|null $lastObj = null;
+    private array $parentMap = [];
 
     public function __construct(Drive $drive, array $config = [])
     {
@@ -83,6 +84,8 @@ class DriveAdapter implements FilesystemAdapter
             throw new UnableToRetrieveMetadata($e->getMessage());
         }
 
+        $this->limitToRoot($file);
+
         $obj = $this->convertToFile($file);
         if ($this->cache && $item) {
             $item->set($obj->toCacheArray());
@@ -113,6 +116,8 @@ class DriveAdapter implements FilesystemAdapter
 
         $logger($parent);
 
+        // Load the parent to ensure it is accessible and restricted to root
+        $this->get($parent);
 
         $cacheKey = 'DIR-' . $this->root . '-' . $parent;
 //        if (empty($query)) {
@@ -140,6 +145,7 @@ class DriveAdapter implements FilesystemAdapter
                 // Pre-fill individual cache too
                 $indivItem = $this->cache->getItem($obj->getId());
                 $indivItem->set($objArray);
+                $indivItem->expiresAfter(new \DateInterval('PT5M'));
                 $this->cache->saveDeferred($indivItem);
             }
 
@@ -496,6 +502,7 @@ class DriveAdapter implements FilesystemAdapter
 
         if ($this->cache) {
             $this->cache->deleteItem($sourceFile->getId());
+            $this->cache->deleteItem('parent_of_' . $sourceFile->getId());
             $this->cache->deleteItem('DIR-' . $this->root . '-' . $targetParent->getId());
             foreach ($sourceFile->file->getParents() as $parent) {
                 $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
@@ -558,6 +565,63 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         return new File($file, $path);
+    }
+
+    public function limitToRoot(DriveFile $driveFile): void
+    {
+        $file = $driveFile->getId();
+        if ($file === $this->root) {
+            return;
+        }
+
+        while ($parent = $this->getParent($file)) {
+            if ($parent === $this->root) {
+                return;
+            }
+            $file = $parent;
+        }
+        throw new UnableToRetrieveMetadata('Outside of allowed scope');
+    }
+
+    private function getParent(?string $fileId): ?string
+    {
+        if (empty($fileId)) {
+            return null;
+        }
+
+        if (isset($this->parentMap[$fileId])) {
+            return $this->parentMap[$fileId];
+        }
+
+        if ($this->cache) {
+            $item = $this->cache->getItem('parent_of_' . $fileId);
+            if ($item->isHit()) {
+                return $item->get();
+            }
+        }
+
+        try {
+            $parent = $this->drive->files->get($fileId, [
+                'fields' => 'id,name,parents'
+            ]);
+            $parentId = $parent && $parent->parents ?  reset($parent->parents) : null;
+            $this->parentMap[$fileId] = $parentId;
+
+            if ($this->cache && isset($item)) {
+                $item->set($parentId);
+                $item->expiresAfter(new \DateInterval('PT12H'));
+                $this->cache->save($item);
+            }
+            return $parentId;
+        } catch (Exception) {
+            $this->parentMap[$fileId] = null;
+            if ($this->cache && isset($item)) {
+                $item->set(null);
+                $item->expiresAfter(new \DateInterval('PT72H'));
+                $this->cache->save($item);
+            }
+        }
+        return null;
     }
 
     /**
