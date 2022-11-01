@@ -733,7 +733,7 @@ class GoogleDriveMediaSource extends modMediaSource
                 if (!empty($allowedExtensions)) {
                     $allowedExtensions = array_map(static function ($ext) {
                         return match ($ext) {
-                            'png', 'jpeg', 'bmp', 'gif', 'tif' => 'image/' . $ext,
+                            'png', 'jpeg', 'bmp', 'gif', 'tif', 'webp' => 'image/' . $ext,
                             'jpg' => 'image/jpeg',
                             'svg' => 'image/svg+xml',
                             default => $ext,
@@ -742,7 +742,6 @@ class GoogleDriveMediaSource extends modMediaSource
                 }
 
                 $mimeType = $object->mimeType();
-                $this->xpdo->log(1, print_r($allowedExtensions, true) . ' => ' . $mimeType);
                 if (!empty($allowedExtensions) && !in_array($mimeType, $allowedExtensions, true)) {
                     continue;
                 }
