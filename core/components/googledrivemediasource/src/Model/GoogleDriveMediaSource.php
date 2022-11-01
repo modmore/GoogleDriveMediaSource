@@ -514,6 +514,7 @@ class GoogleDriveMediaSource extends modMediaSource
         $lastmod = $file->lastModified();
         $size = $file->fileSize();
 
+        $url = $this->getObjectUrl($file->getId());
         $file_list = [
             'id' => $file->getId(),
             'sid' => $this->get('id'),
@@ -531,12 +532,12 @@ class GoogleDriveMediaSource extends modMediaSource
             'thumb_width' => $thumb_image_info['width'],
             'thumb_height' => $thumb_image_info['height'],
 
-            'url' => $path,
-            'relativeUrl' => ltrim($path, DIRECTORY_SEPARATOR),
-            'fullRelativeUrl' => rtrim($bases['url']) . ltrim($path, DIRECTORY_SEPARATOR),
-            'ext' => $ext,
-            'pathname' => $path,
-            'pathRelative' => rawurlencode($path),
+            'url' => $url,
+            'relativeUrl' => $url,
+            'fullRelativeUrl' => $url,
+            'ext' => $file->file->fileExtension ?? $ext,
+            'pathname' => $url,
+            'pathRelative' => $url,
 
             'lastmod' => $lastmod,
             'disabled' => false,
@@ -682,6 +683,83 @@ class GoogleDriveMediaSource extends modMediaSource
         } catch (UnableToRetrieveMetadata $e) {
         }
         return false;
+    }
+    public function getObjectsInContainer($path)
+    {
+        $properties = $this->getPropertyListWithDefaults();
+        $path = $this->postfixSlash($path);
+        $bases = $this->getBases($path);
+
+        $imageExtensions = explode(',', $properties['imageExtensions']);
+        $allowedExtensions = $this->getAllowedExtensionsArray($properties);
+
+        $files = $fileNames = [];
+
+        if (!empty($path) && $path !== DIRECTORY_SEPARATOR) {
+
+            try {
+                $mimeType = $this->filesystem->mimeType($path);
+            } catch (FilesystemException | UnableToRetrieveMetadata $e) {
+                $this->addError('path', $e->getMessage());
+                $this->xpdo->log(modX::LOG_LEVEL_ERROR, $e->getMessage());
+                return [];
+
+            }
+
+            // Ensure this is a directory.
+            if ($mimeType !== 'directory') {
+                $this->addError('path', $this->xpdo->lexicon('file_folder_err_invalid'));
+                return [];
+            }
+        }
+
+        try {
+//            /** @var File[]|Directory[] $contents */
+            $contents = $this->filesystem->listContents($path);
+        } catch (FilesystemException $e) {
+            $this->addError('path', $e->getMessage());
+            $this->xpdo->log(modX::LOG_LEVEL_ERROR, $e->getMessage());
+            return [];
+        }
+        foreach ($contents as $object) {
+            if ($object instanceof Directory && !$this->hasPermission('directory_list')) {
+                continue;
+            }
+
+            if ($object instanceof File && !$properties['hideFiles'] && $this->hasPermission('file_list')) {
+                // ----- start of Google Drive specific changes -----
+
+                // Turn extensions into mime types
+                if (!empty($allowedExtensions)) {
+                    $allowedExtensions = array_map(static function ($ext) {
+                        return match ($ext) {
+                            'png', 'jpeg', 'bmp', 'gif', 'tif' => 'image/' . $ext,
+                            'jpg' => 'image/jpeg',
+                            'svg' => 'image/svg+xml',
+                            default => $ext,
+                        };
+                    }, $allowedExtensions);
+                }
+
+                $mimeType = $object->mimeType();
+                $this->xpdo->log(1, print_r($allowedExtensions, true) . ' => ' . $mimeType);
+                if (!empty($allowedExtensions) && !in_array($mimeType, $allowedExtensions, true)) {
+                    continue;
+                }
+                $fileNames[] = strtoupper($object['path']);
+
+                $files[$object['path']] = $this->buildFileBrowserViewList($object['path'], '', $imageExtensions, $bases, $properties);
+            }
+        }
+
+        $ls = [];
+        // now sort files/directories
+        array_multisort($fileNames, SORT_ASC, SORT_STRING, $files);
+        foreach ($files as $file) {
+            $ls[] = $file;
+        }
+
+        return $ls;
     }
 
     protected function buildManagerImagePreview($path, $ext, $width, $height, $bases, $properties = []): array
