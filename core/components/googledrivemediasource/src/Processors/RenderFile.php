@@ -9,6 +9,9 @@ use modmore\GoogleDriveMediaSource\Adapter\File;
 use modmore\GoogleDriveMediaSource\Model\GoogleDriveMediaSource;
 use MODX\Revolution\Processors\Processor;
 use MODX\Revolution\Sources\modMediaSource;
+use Psr\Cache\InvalidArgumentException;
+use Throwable;
+use xPDO\xPDO;
 
 class RenderFile extends Processor
 {
@@ -21,20 +24,26 @@ class RenderFile extends Processor
         /** @var modMediaSource|GoogleDriveMediaSource $source */
         $source = $this->modx->getObject(modMediaSource::class, ['id' => $sourceId]);
         if (!($source instanceof GoogleDriveMediaSource) || !$source->initialize()) {
-            return $this->failure('Drive unavailable.');
+            $this->modx->log(xPDO::LOG_LEVEL_ERROR, 'RenderFile request for source' . $sourceId . ' failed: source is not found or not a Google Drive type.');
+            $this->error('Source unavailable.', 500);
         }
 
         $this->source = $source;
 
         $fileId = (string)$this->getProperty('id');
-        $this->file = $this->source->getDriveFile($fileId);
+        try {
+            $this->file = $this->source->getDriveFile($fileId);
+        } catch (Throwable) {
+            $this->error('File not found', 404);
+        }
+
         return true;
     }
 
     public function process()
     {
         if ($this->file instanceof Directory) {
-            return $this->failure('Invalid file.');
+            $this->error('Invalid file.', 400);
         }
 
         $mime = $this->file->mimeType();
@@ -46,11 +55,12 @@ class RenderFile extends Processor
         else {
             header("Content-Type: $mime");
         }
+
         @session_write_close();
         try {
             echo $this->source->getAdapter()->read($this->file->getId(), $format);
-        } catch (FilesystemException $e) {
-            echo $this->failure('Could not read file.');
+        } catch (FilesystemException) {
+            $this->error('Could not read file.', 503);
         }
         exit();
     }
@@ -120,6 +130,14 @@ class RenderFile extends Processor
         }
 
         return $format;
+    }
+
+    private function error(string $message, int $code = 400)
+    {
+        @session_write_close();
+        http_response_code($code);
+        echo '<h1>'. $message . '</h1>';
+        exit();
     }
 }
 

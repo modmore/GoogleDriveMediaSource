@@ -693,6 +693,12 @@ class GoogleDriveMediaSource extends modMediaSource
         ];
     }
 
+    /**
+     * @param string $path
+     * @return File|Directory
+     * @throws InvalidArgumentException
+     * @throws UnableToRetrieveMetadata
+     */
     public function getDriveFile(string $path): File|Directory
     {
         return $this->adapter->get($path);
