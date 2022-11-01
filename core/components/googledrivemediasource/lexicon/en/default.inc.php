@@ -8,3 +8,4 @@ $_lang['googledrivemediasource.clientId_desc'] = 'Please see the documentation f
 $_lang['googledrivemediasource.clientSecret_desc'] = 'Please see the documentation for a detailed description of where to create OAuth Client Credentials. Once a Client ID and Secret have been added, save and refresh the page to continue authenticating.';
 $_lang['googledrivemediasource.refreshToken_logindesc'] = '[[+url]] ';
 $_lang['googledrivemediasource.maxItemsPerLevel_desc'] = 'The maximum number of items that will be returned on a single level.';
+$_lang['googledrivemediasource.urlPattern_desc'] = 'The URL pattern to use providing public file URLs. See the documentation for instructions on using a custom urlPattern.';

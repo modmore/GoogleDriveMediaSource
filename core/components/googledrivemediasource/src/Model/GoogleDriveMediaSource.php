@@ -11,10 +11,10 @@ use League\Flysystem\Visibility;
 use modmore\GoogleDriveMediaSource\Adapter\Directory;
 use modmore\GoogleDriveMediaSource\Adapter\DriveAdapter;
 use modmore\GoogleDriveMediaSource\Adapter\File;
-use modmore\GoogleDriveMediaSource\Processors\FilePreview;
 use modmore\RevolutionCache\Pool;
 use MODX\Revolution\modX;
 use MODX\Revolution\Sources\modMediaSource;
+use Psr\Cache\InvalidArgumentException;
 use xPDO\xPDO;
 
 global $logger;
@@ -46,12 +46,14 @@ class GoogleDriveMediaSource extends modMediaSource
     private ?Client $client = null;
 
     private string $root = '';
+    private string $urlPattern = '';
 
     public function initialize()
     {
         parent::initialize();
 
         $properties = $this->getProperties();
+        $this->urlPattern = $properties['urlPattern']['value'];
 
         $client = $this->client();
         $drive = new Drive($client);
@@ -87,10 +89,10 @@ class GoogleDriveMediaSource extends modMediaSource
             'pathAbsoluteWithPath' => $path,
             'pathRelative' => $path,
             'urlIsRelative' => false,
-            'url' => $this->root,
-            'urlAbsolute' => $this->root,
-            'urlAbsoluteWithPath' => $path,
-            'urlRelative' => $path,
+            'url' => $this->urlPattern,
+            'urlAbsolute' => $this->urlPattern,
+            'urlAbsoluteWithPath' => $this->urlPattern . $path,
+            'urlRelative' => $this->urlPattern . $path,
         ];
     }
 
@@ -142,12 +144,25 @@ class GoogleDriveMediaSource extends modMediaSource
                 'options' => [],
                 'value' => 250,
             ],
+            'urlPattern' => [
+                'name' => 'urlPattern',
+                'desc' => $this->xpdo->lexicon('googledrivemediasource.urlPattern_desc'),
+                'type' => 'textfield',
+                'options' => '',
+                'value' => '',
+            ],
         ];
     }
 
 
     public function prepareProperties(array $properties = []): array
     {
+
+        if (empty($properties['urlPattern']['value'])) {
+            $assets = $this->xpdo->getOption('googledrivemediasource.assets_url', null, $this->xpdo->getOption('assets_url') . 'components/googledrivemediasource/');
+            $properties['urlPattern']['value'] = $assets . '?s={source}&id={id}';
+        }
+
         $oAuth = $this->oauth2($properties);
 
         $properties['refreshToken']['desc'] = '<a href="' . $oAuth->buildFullAuthorizationUri() . '" class="x-btn primary-button">Authorize your Google Account</a>';
@@ -394,7 +409,6 @@ class GoogleDriveMediaSource extends modMediaSource
     protected function _buildFileList(File $file, $ext, $imageExtensions, $bases, $properties)
     {
         $path = $file->path();
-        $file_name = basename($path);
 
         $editAction = $this->getEditActionId();
         $canSave = $this->checkPolicy('save');
@@ -405,14 +419,10 @@ class GoogleDriveMediaSource extends modMediaSource
 
         $cls = [];
 
-        $fullPath = $path;
-        if (!empty($bases['pathAbsolute'])) {
-            $fullPath = $bases['pathAbsolute'] . ltrim($path, DIRECTORY_SEPARATOR);
-        }
 
-//        if (!empty($properties['currentFile']) && rawurldecode($properties['currentFile']) == $fullPath . $path && $properties['currentAction'] == $editAction) {
-//            $cls[] = 'active-node';
-//        }
+        if (!empty($properties['currentFile']) && $properties['currentFile'] === $id && $properties['currentAction'] === $editAction) {
+            $cls[] = 'active-node';
+        }
         if ($driveCapabilities->canDelete && $canRemove && $this->hasPermission('file_remove')) {
             $cls[] = 'premove';
         }
@@ -425,6 +435,8 @@ class GoogleDriveMediaSource extends modMediaSource
                 ? '?a=' . $editAction . '&file=' . $id . '&wctx=' . $this->ctx->get('key') . '&source=' . $this->get('id')
                 : null;
         }
+
+        $url = $this->getObjectUrl($id);
         $file_list = [
             'id' => $id,
             'sid' => $this->get('id'),
@@ -434,13 +446,13 @@ class GoogleDriveMediaSource extends modMediaSource
             'type' => 'file',
             'leaf' => true,
             'page' => $page,
-            'path' => $path,
-            'pathRelative' => $path,
+            'path' => $url,
+            'pathRelative' => $url,
             'directory' => $file->path(),
-            'url' => $bases['url'] . $path,
-            'urlExternal' => $this->getObjectUrl($path),
-            'urlAbsolute' => $bases['urlAbsoluteWithPath'] . ltrim($file_name, DIRECTORY_SEPARATOR),
-            'file' => rawurlencode($fullPath . $path),
+            'url' => $url,
+            'urlExternal' => $url,
+            'urlAbsolute' => $url,
+            'file' => rawurlencode($url),
             'visibility' => $file->visibility(),
         ];
 
@@ -556,8 +568,6 @@ class GoogleDriveMediaSource extends modMediaSource
         $canSave = $this->checkPolicy('save');
         $canRemove = $this->checkPolicy('remove');
         $canView = $this->checkPolicy('view');
-        $canOpen = !empty($data['urlExternal']) &&
-            (empty($data['visibility']) || $data['visibility'] === Visibility::PUBLIC);
 
         $menu = [];
 
@@ -634,7 +644,7 @@ class GoogleDriveMediaSource extends modMediaSource
         }
 
 
-        if ($this->hasPermission('file_view') && $canOpen) {
+        if ($this->hasPermission('file_view')) {
             $menu[] = [
                 'text' => $this->xpdo->lexicon('file_copy_path'),
                 'handler' => 'this.copyRelativePath',
@@ -644,7 +654,7 @@ class GoogleDriveMediaSource extends modMediaSource
                 'handler' => 'this.openFile',
             ];
         }
-        if ($this->hasPermission('file_remove') && $canRemove) {
+        if ($canRemove && $this->hasPermission('file_remove')) {
             $menu[] = '-';
             $menu[] = [
                 'text' => $this->xpdo->lexicon('file_remove'),
@@ -676,20 +686,8 @@ class GoogleDriveMediaSource extends modMediaSource
 
     protected function buildManagerImagePreview($path, $ext, $width, $height, $bases, $properties = []): array
     {
-        $file = $this->adapter->get($path);
-
-        $previewUrl = $this->xpdo->getOption('googledrivemediasource.assets_url', null, MODX_ASSETS_URL . 'components/googledrivemediasource/');
-        $previewUrl .= 'connector.php?';
-        $previewUrl .= http_build_query([
-            'action' => FilePreview::class,
-            'source' => $this->get('id'),
-            'file' => $file->getId(),
-            'wctx' => 'mgr',
-            'HTTP_MODAUTH' => $this->xpdo->user->getUserToken('mgr'),
-        ]);
-
         return [
-            'src' => $previewUrl,
+            'src' => $this->getObjectUrl($path),
             'width' => $width,
             'height' => $height,
         ];
@@ -698,6 +696,27 @@ class GoogleDriveMediaSource extends modMediaSource
     public function getDriveFile(string $path): File|Directory
     {
         return $this->adapter->get($path);
+    }
+
+    public function getObjectUrl($object = ''): ?string
+    {
+        try {
+            $file = $this->adapter->get($object);
+        } catch (InvalidArgumentException $e) {
+            return null;
+        }
+
+        if ($file instanceof Directory) {
+            return null;
+        }
+
+        return str_replace([
+            '{source}',
+            '{id}'
+        ], [
+            $this->get('id'),
+            $file->getId(),
+        ], $this->urlPattern);
     }
 
 

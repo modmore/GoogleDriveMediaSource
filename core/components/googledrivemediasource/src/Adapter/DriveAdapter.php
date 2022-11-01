@@ -275,7 +275,7 @@ class DriveAdapter implements FilesystemAdapter
         }
     }
 
-    public function read(string $path): string
+    public function read(string $path, string $exportMimeType = ''): string
     {
         $file = $this->get($path);
         if (!($file instanceof File)) {
@@ -283,14 +283,24 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         $cacheKey = $file->getId() . '_content';
+        if (!empty($exportMimeType)) {
+            $cacheKey .= '_' . str_replace(['/', '+'], '-', $exportMimeType);
+        }
         $item = $this->cache ? $this->cache->getItem($cacheKey) : false;
         if ($item && $item->isHit()) {
             return base64_decode($item->get());
         }
 
-        $response = $this->drive->files->get($file->getId(), [
-            'alt' => 'media',
-        ]);
+        $mime = $file->mimeType();
+
+        if (str_starts_with($mime, 'application/vnd.google-apps')) {
+            $response = $this->drive->files->export($file->getId(), $exportMimeType);
+        }
+        else {
+            $response = $this->drive->files->get($file->getId(), [
+                'alt' => 'media',
+            ]);
+        }
 
         if ($response) {
             $body = (string)$response->getBody();
