@@ -65,6 +65,14 @@ if (!createObject('modSystemSetting', array(
     echo "Error creating googledrivemediasource.assets_url setting.\n";
 }
 
+if (!createObject('modPlugin', array(
+    'name' => 'Google Drive Media Source',
+    'static' => true,
+    'static_file' => $componentPath.'/_build/elements/plugins/googledrivemediasource.plugin.php',
+), 'name', false)) {
+    echo "Error creating Google Drive Media Source Plugin.\n";
+}
+
 $settings = include dirname(__DIR__) . '/_build/data/settings.php';
 foreach ($settings as $key => $opts) {
     $val = $opts['value'];

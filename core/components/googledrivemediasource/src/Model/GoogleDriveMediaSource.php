@@ -454,6 +454,9 @@ class GoogleDriveMediaSource extends modMediaSource
             'urlAbsolute' => $url,
             'file' => rawurlencode($url),
             'visibility' => $file->visibility(),
+            'drive' => [
+                'webViewLink' => $file->file->webViewLink,
+            ]
         ];
 
         $file_list['menu'] = [
@@ -546,6 +549,9 @@ class GoogleDriveMediaSource extends modMediaSource
             'page' => $page,
             'size' => $size,
             'menu' => $this->getFileMenu($file),
+            'drive' => [
+                'webViewLink' => $file->file->webViewLink,
+            ]
         ];
 
         return $file_list;
@@ -574,10 +580,8 @@ class GoogleDriveMediaSource extends modMediaSource
 
         if ($canView && $file->file->webViewLink) {
             $menu[] = [
-                'text' => 'Open in Google Drive',
-                // @todo figure out how to set a custom handler correctly
-//                'handler' => "function a () { console.log(document); }",
-//                'handler' => 'function openDrive () { window.open("' . $file->file->webViewLink . '"); }'
+                'text' => $this->xpdo->lexicon('googledrivemediasource.open_in_drive'),
+                'handler' => 'GoogleDriveMS.openInDrive',
             ];
             $menu[] = '-';
         }
@@ -615,32 +619,32 @@ class GoogleDriveMediaSource extends modMediaSource
 
         if ($mime === 'application/vnd.google-apps.document') {
             $menu[] = [
-                'text' => 'Download as PDF', // application/pdf
-                // @todo handler
+                'text' => $this->xpdo->lexicon('googledrivemediasource.download_as_pdf'),
+                'handler' => 'GoogleDriveMS.downloadAsPDF',
             ];
             $menu[] = [
-                'text' => 'Download as MS Word', // application/vnd.openxmlformats-officedocument.wordprocessingml.document
-                // @todo handler
+                'text' => $this->xpdo->lexicon('googledrivemediasource.download_as_word'),
+                'handler' => 'GoogleDriveMS.downloadAsWord',
             ];
         }
         elseif ($mime === 'application/vnd.google-apps.spreadsheet') {
             $menu[] = [
-                'text' => 'Download as PDF', // application/pdf
-                // @todo handler
+                'text' => $this->xpdo->lexicon('googledrivemediasource.download_as_pdf'),
+                'handler' => 'GoogleDriveMS.downloadAsPDF',
             ];
             $menu[] = [
-                'text' => 'Download as MS Excel', // application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-                // @todo handler
+                'text' => $this->xpdo->lexicon('googledrivemediasource.download_as_excel'),
+                'handler' => 'GoogleDriveMS.downloadAsExcel',
             ];
         }
         elseif ($mime === 'application/vnd.google-apps.presentation') {
             $menu[] = [
-                'text' => 'Download as PDF', // application/pdf
-                // @todo handler
+                'text' => $this->xpdo->lexicon('googledrivemediasource.download_as_pdf'),
+                'handler' => 'GoogleDriveMS.downloadAsPDF',
             ];
             $menu[] = [
-                'text' => 'Download as MS PowerPoint', // application/vnd.openxmlformats-officedocument.presentationml.presentation
-                // @todo handler
+                'text' => $this->xpdo->lexicon('googledrivemediasource.download_as_powerpoint'),
+                'handler' => 'GoogleDriveMS.downloadAsPowerpoint',
             ];
         }
 
@@ -714,7 +718,6 @@ class GoogleDriveMediaSource extends modMediaSource
         }
 
         try {
-//            /** @var File[]|Directory[] $contents */
             $contents = $this->filesystem->listContents($path);
         } catch (FilesystemException $e) {
             $this->addError('path', $e->getMessage());
@@ -727,7 +730,6 @@ class GoogleDriveMediaSource extends modMediaSource
             }
 
             if ($object instanceof File && !$properties['hideFiles'] && $this->hasPermission('file_list')) {
-                // ----- start of Google Drive specific changes -----
 
                 // Turn extensions into mime types
                 if (!empty($allowedExtensions)) {
