@@ -314,19 +314,19 @@ class GoogleDriveMediaSource extends modMediaSource
         $allowedExtensions = $this->getAllowedExtensionsArray($properties);
 
         $directories = $dirNames = $files = $fileNames = [];
-
+        $parentDirectory = null;
         if (!empty($path)) {
 
             // Ensure the provided path can be read.
             try {
-                $dir = $this->adapter->get($path);
+                $parentDirectory = $this->adapter->get($path);
             } catch (FilesystemException | UnableToRetrieveMetadata $e) {
                 $this->addError('path', $e->getMessage());
                 $this->xpdo->log(modX::LOG_LEVEL_ERROR, $e->getMessage());
                 return [];
             }
 
-            if (!($dir instanceof Directory)) {
+            if (!($parentDirectory instanceof Directory)) {
                 $this->addError('path', $this->xpdo->lexicon('file_folder_err_invalid'));
                 return [];
             }
@@ -352,9 +352,11 @@ class GoogleDriveMediaSource extends modMediaSource
 
             /** @var File|Directory $object */
             foreach ($contents as $object) {
-                $path = $object->path();
-                $id = $object->getId();
+                $id = $path = $object->getId();
                 $name = $object->getName();
+                if ($parentDirectory) {
+                    $path = "{$parentDirectory->getId()}/{$path}";
+                }
 
                 if ($object instanceof Directory) {
                     $cls = $this->getExtJSDirClasses();
@@ -381,15 +383,15 @@ class GoogleDriveMediaSource extends modMediaSource
 
                 }
                 elseif ($object instanceof File) {
-                    $files[$id] = $this->_buildFileList($object, '', $imageExtensions, $bases, $properties);
+                    $files[$id] = $this->_buildFileList($object, $bases, $properties, $parentDirectory);
                 }
             }
 
             $ls = [];
             // now sort files/directories
             array_multisort($dirNames, SORT_ASC, SORT_STRING, $directories);
-            foreach ($directories as $dir) {
-                $ls[] = $dir;
+            foreach ($directories as $parentDirectory) {
+                $ls[] = $parentDirectory;
             }
 
 //            array_multisort($fileNames, SORT_ASC, SORT_STRING, $files);
@@ -406,7 +408,7 @@ class GoogleDriveMediaSource extends modMediaSource
         }
     }
 
-    protected function _buildFileList(File $file, $ext, $imageExtensions, $bases, $properties)
+    protected function _buildFileList(File $file, $bases, $properties, Directory|null $parentDirectory = null)
     {
         $path = $file->path();
 
@@ -437,6 +439,10 @@ class GoogleDriveMediaSource extends modMediaSource
         }
 
         $url = $this->getObjectUrl($id);
+        $path = $id;
+        if ($parentDirectory) {
+            $path = "{$parentDirectory->getId()}/{$path}";
+        }
         $file_list = [
             'id' => $id,
             'sid' => $this->get('id'),
@@ -446,8 +452,8 @@ class GoogleDriveMediaSource extends modMediaSource
             'type' => 'file',
             'leaf' => true,
             'page' => $page,
-            'path' => $url,
-            'pathRelative' => $url,
+            'path' => $path,
+            'pathRelative' => $path,
             'directory' => $file->path(),
             'url' => $url,
             'urlExternal' => $url,
