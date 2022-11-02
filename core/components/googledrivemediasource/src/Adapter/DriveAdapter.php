@@ -254,12 +254,16 @@ class DriveAdapter implements FilesystemAdapter
             'fields' => self::GET_FIELDS
         ];
 
-        if ($srcFile) {
-            $obj = $this->drive->files->update($srcFile->getId(), $file, $params);
-            unset($this->memoryCache[$srcFile->getId()]);
+        try {
+            if ($srcFile) {
+                $obj = $this->drive->files->update($srcFile->getId(), $file, $params);
+                unset($this->memoryCache[$srcFile->getId()]);
+            } else {
+                $obj = $this->drive->files->create($file, $params);
+            }
         }
-        else {
-            $obj = $this->drive->files->create($file, $params);
+        catch (Exception $e) {
+            throw new UnableToWriteFile($e->getMessage());
         }
 
         if (!$obj) {
