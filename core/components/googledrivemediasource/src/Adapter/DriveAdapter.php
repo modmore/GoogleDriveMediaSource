@@ -60,7 +60,17 @@ class DriveAdapter implements FilesystemAdapter
     public function get(string $path): File|Directory
     {
         $segments = explode('/', trim($path, '/'));
-        $fileId = end($segments);
+        $fileId = array_pop($segments);
+        $parent = end($segments) ?: $this->root;
+        $parentObj = null;
+
+        try {
+            if ($parent !== $this->root && $parent !== $fileId) {
+                $parentObj = $this->get($parent);
+            }
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata $e) {
+        }
+
 
         if (isset($this->memoryCache[$fileId])) {
             return $this->memoryCache[$fileId];
@@ -78,10 +88,23 @@ class DriveAdapter implements FilesystemAdapter
             return $obj;
         }
 
+        $file = null;
         try {
             $file = $this->drive->files->get($fileId, $params);
         } catch (\Exception $e) {
-            throw new UnableToRetrieveMetadata($e->getMessage());
+            try {
+                $files = $this->fetchList($parentObj ? $parentObj->getId() : $parent, "name = '$fileId'");
+                $foundFile = reset($files);
+                if ($foundFile) {
+                    $file = $foundFile->file;
+                }
+            } catch (\Exception $e) {
+                throw new UnableToRetrieveMetadata($e->getMessage());
+            }
+        }
+
+        if (!$file) {
+            throw new UnableToRetrieveMetadata('File not found');
         }
 
         $this->limitToRoot($file);
@@ -235,11 +258,18 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         $stream = Utils::streamFor($contents);
-        $size = $stream->getSize();
 
         $file = new DriveFile();
         if (!$srcFile) {
             $file->setName($name);
+
+            // Fetch the parent to handle name-based parents automatically
+            try {
+                $parentObj = $this->get($parent);
+                $parent = $parentObj->getId();
+            } catch (UnableToRetrieveMetadata|InvalidArgumentException $e) {
+                // don't fail immediately if parent isn't provided or not found
+            }
             $file->setParents([$parent]);
 
             $detector = new FinfoMimeTypeDetector();
