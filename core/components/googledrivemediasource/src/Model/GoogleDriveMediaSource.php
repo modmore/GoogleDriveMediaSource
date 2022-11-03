@@ -166,7 +166,7 @@ class GoogleDriveMediaSource extends modMediaSource
 
         $oAuth = $this->oauth2($properties);
 
-        $properties['refreshToken']['desc'] = '<a href="' . $oAuth->buildFullAuthorizationUri() . '" class="x-btn primary-button">Authorize your Google Account</a>';
+        $properties['refreshToken']['desc'] = '<a href="' . $oAuth->buildFullAuthorizationUri(['prompt' => 'consent']) . '" class="x-btn primary-button">Authorize your Google Account</a>';
         if ($oAuth->getAccessToken()) {
             $properties['refreshToken']['desc'] = ' &check; Successfully authorized. To change accounts or re-connect: ' . $properties['refreshToken']['desc'];
         }
@@ -177,7 +177,7 @@ class GoogleDriveMediaSource extends modMediaSource
         }
 
         if (!$oAuth->getClientId() || !$oAuth->getClientSecret()) {
-            unset($properties['refreshToken']);
+            unset($properties['refreshToken'], $properties['root']);
 
             return parent::prepareProperties($properties);
         }
@@ -302,7 +302,7 @@ class GoogleDriveMediaSource extends modMediaSource
             if (array_key_exists('refresh_token', $tokens)) {
                 $this->setProperties([
                     'refreshToken' => $tokens['refresh_token'],
-                ]);
+                ], true);
                 $this->save();
                 return $tokens['refresh_token'];
             }
