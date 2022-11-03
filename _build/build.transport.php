@@ -29,7 +29,7 @@ if (!defined('MOREPROVIDER_BUILD')) {
     define('PKG_NAME', 'GoogleDriveMediaSource');
     define('PKG_NAMESPACE', 'googledrivemediasource');
     define('PKG_VERSION', '1.0.0');
-    define('PKG_RELEASE', 'dev1');
+    define('PKG_RELEASE', 'dev5');
 
     /* load modx */
     require_once dirname(__DIR__) . '/config.core.php';
@@ -70,6 +70,10 @@ $builder->registerNamespace(PKG_NAMESPACE,false,true,'{core_path}components/'.PK
 
 $modx->log(xPDO::LOG_LEVEL_INFO,'Packaged in namespace.'); flush();
 
+if (file_exists($sources['source_core'] . '/vendor/')) {
+    rename($sources['source_core'] . '/vendor/', dirname($sources['source_core']) . '/vendor/');
+}
+
 $builder->package->put(
     [
         'source' => $sources['source_core'],
@@ -93,6 +97,11 @@ $builder->package->put(
     ]
 );
 $modx->log(xPDO::LOG_LEVEL_INFO,'Packaged in core, validators, and resolvers.'); flush();
+
+
+if (file_exists(dirname($sources['source_core']) . '/vendor/')) {
+    rename(dirname($sources['source_core']) . '/vendor/', $sources['source_core'] . '/vendor/');
+}
 
 /**
  * Assets
