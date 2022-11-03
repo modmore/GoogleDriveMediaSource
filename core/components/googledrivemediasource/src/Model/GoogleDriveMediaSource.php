@@ -171,15 +171,15 @@ class GoogleDriveMediaSource extends modMediaSource
             $properties['refreshToken']['desc'] = ' &check; Successfully authorized. To change accounts or re-connect: ' . $properties['refreshToken']['desc'];
         }
 
+        if (!$oAuth->getClientId() || !$oAuth->getClientSecret()) {
+            unset($properties['refreshToken']);
+
+            return parent::prepareProperties($properties);
+        }
+
         // Look for auth codes passed in
         if (isset($_REQUEST['code'])) {
             $properties['refreshToken']['value'] = $this->checkAuthorizationCode($oAuth, $_REQUEST['code']);
-        }
-
-        if (!$oAuth->getClientId() || !$oAuth->getClientSecret()) {
-            unset($properties['refreshToken'], $properties['root']);
-
-            return parent::prepareProperties($properties);
         }
 
         if ($oAuth->getRefreshToken()) {
