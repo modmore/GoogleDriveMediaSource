@@ -37,7 +37,7 @@ class DriveAdapter implements FilesystemAdapter
     private File|Directory|null $lastObj = null;
     private array $parentMap = [];
     private string $corpora = 'user';
-    private bool $limitToRoot;
+    private bool $limitToRoot = true;
 
     public function __construct(Drive $drive, array $config = [])
     {
@@ -47,7 +47,9 @@ class DriveAdapter implements FilesystemAdapter
             $this->root = substr($this->root, 6);
             $this->corpora = 'drive';
         }
-        $this->limitToRoot = !($config['limitToRoot'] === false);
+        if (isset($config['limitToRoot']) && $config['limitToRoot'] === false) {
+            $this->limitToRoot = false;
+        }
 
         if (isset($config['cache']) && $config['cache'] instanceof CacheItemPoolInterface) {
             $this->cache = $config['cache'];
