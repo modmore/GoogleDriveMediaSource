@@ -1,0 +1,5 @@
+Google Drive Media Source 1.0.0-rc1
+-----------------------------------
+Released on 2022-11-03
+
+- First release
