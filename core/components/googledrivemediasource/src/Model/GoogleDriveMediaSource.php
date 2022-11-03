@@ -793,7 +793,8 @@ class GoogleDriveMediaSource extends modMediaSource
     {
         try {
             $file = $this->adapter->get($object);
-        } catch (InvalidArgumentException $e) {
+        } catch (InvalidArgumentException|UnableToRetrieveMetadata $e) {
+            $this->xpdo->log(1, 'Object Url not found for ' . $object . ': ' . $e->getMessage());
             return null;
         }
 
@@ -815,6 +816,24 @@ class GoogleDriveMediaSource extends modMediaSource
     {
         // Make sure this inherited method isn't accidentally called anywhere else
         return [];
+    }
+
+    public function uploadObjectsToContainer($container, array $objects = [])
+    {
+        if (parent::uploadObjectsToContainer($container, $objects)) {
+            foreach ($objects as &$file) {
+                if ($file['error'] === UPLOAD_ERR_OK && $f = $this->adapter->getLastItem()) {
+                    $path = $f->getId(); // @todo maybe prefix container?
+                    $file['name'] = $path;
+                    $this->xpdo->invokeEvent('OnFileManagerFileRename', [
+                        'path' => $path,
+                        'source' => &$this,
+                    ]);
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
