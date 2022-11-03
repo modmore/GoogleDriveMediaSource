@@ -3,6 +3,7 @@ namespace modmore\GoogleDriveMediaSource\Model;
 
 use Google\Auth\OAuth2;
 use Google\Client;
+use Google\Exception;
 use Google\Service\Drive;
 use League\Flysystem\FilesystemException;
 use League\Flysystem\StorageAttributes;
@@ -192,7 +193,10 @@ class GoogleDriveMediaSource extends modMediaSource
 
                 $client = $this->client($oAuth);
                 $drive = new Drive($client);
-                $adapter = new DriveAdapter($drive);
+                $adapter = new DriveAdapter($drive, [
+                    'root' => 'root',
+                    'limitToRoot' => false,
+                ]);
 
                 try {
                     $folders = $adapter->listContents('', false);
@@ -213,13 +217,22 @@ class GoogleDriveMediaSource extends modMediaSource
                 }
 
 
-//            $drives = $adapter->getService()->teamdrives->listTeamdrives()->getTeamDrives();
-//            foreach ($drives as $drive) {
-//                $properties['root']['options'][] = [
-//                    'name' => '[Team Drive] ' . $drive->name,
-//                    'value' => 'teamdrive/' . $drive->id,
-//                ];
-////            }
+                try {
+                    $drives = $drive->drives->listDrives([
+                        'pageSize' => 100,
+                    ]);
+
+                    foreach ($drives->getDrives() as $drive) {
+                        $properties['root']['options'][] = [
+                            'name' => '[Drive] ' . $drive->getName(),
+                            'value' => 'drive/' . $drive->getId(),
+                        ];
+                    }
+
+                } catch (Exception $e) {
+                    $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, 'Received error loading shared team drives for Google Drive Media Source: ' . $e->getMessage());
+                    return parent::prepareProperties($properties);
+                }
             }
 
             return parent::prepareProperties($properties);

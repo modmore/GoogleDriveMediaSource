@@ -36,12 +36,18 @@ class DriveAdapter implements FilesystemAdapter
     private array $memoryCache = [];
     private File|Directory|null $lastObj = null;
     private array $parentMap = [];
+    private string $corpora = 'user';
+    private bool $limitToRoot;
 
     public function __construct(Drive $drive, array $config = [])
     {
         $this->drive = $drive;
         $this->root = $config['root'] ?? 'root';
-
+        if (str_starts_with('drive/', $this->root)) {
+            $this->root = substr($this->root, 6);
+            $this->corpora = 'drive';
+        }
+        $this->limitToRoot = !($config['limitToRoot'] === false);
 
         if (isset($config['cache']) && $config['cache'] instanceof CacheItemPoolInterface) {
             $this->cache = $config['cache'];
@@ -78,6 +84,7 @@ class DriveAdapter implements FilesystemAdapter
 
         $params = [
             'fields' => self::GET_FIELDS,
+            'supportsAllDrives' => true,
         ];
 
         $item = $this->cache ? $this->cache->getItem($fileId) : false;
@@ -203,6 +210,8 @@ class DriveAdapter implements FilesystemAdapter
                 'spaces' => 'drive',
                 'pageToken' => $pageToken,
                 'fields' => self::LIST_FIELDS,
+                'supportsAllDrives' => true,
+                'corpora' => $this->corpora,
             ];
 
             try {
@@ -281,7 +290,8 @@ class DriveAdapter implements FilesystemAdapter
         $params = [
             'data' => $stream,
             'uploadType' => 'media',
-            'fields' => self::GET_FIELDS
+            'fields' => self::GET_FIELDS,
+            'supportsAllDrives' => true,
         ];
 
         try {
@@ -328,11 +338,14 @@ class DriveAdapter implements FilesystemAdapter
         $mime = $file->mimeType();
 
         if (str_starts_with($mime, 'application/vnd.google-apps')) {
-            $response = $this->drive->files->export($file->getId(), $exportMimeType);
+            $response = $this->drive->files->export($file->getId(), $exportMimeType, [
+                'supportsAllDrives' => true,
+            ]);
         }
         else {
             $response = $this->drive->files->get($file->getId(), [
                 'alt' => 'media',
+                'supportsAllDrives' => true,
             ]);
         }
 
@@ -377,7 +390,9 @@ class DriveAdapter implements FilesystemAdapter
         $file = new DriveFile();
         $file->setTrashed(true);
 
-        if (!$result = $this->drive->files->update($item->getId(), $file)) {
+        if (!$result = $this->drive->files->update($item->getId(), $file, [
+            'supportsAllDrives' => true,
+        ])) {
             throw UnableToDeleteFile::atLocation($path, 'Received error marking item as trashed: ' . print_r($result, true));
         }
         $this->lastObj = $item;
@@ -412,7 +427,9 @@ class DriveAdapter implements FilesystemAdapter
         $file = new DriveFile();
         $file->setTrashed(true);
 
-        if (!$result = $this->drive->files->update($item->getId(), $file)) {
+        if (!$result = $this->drive->files->update($item->getId(), $file, [
+            'supportsAllDrives' => true,
+        ])) {
             throw UnableToDeleteDirectory::atLocation($path, 'Received error marking item as trashed: ' . print_r($result, true));
         }
         $this->lastObj = $item;
@@ -437,7 +454,8 @@ class DriveAdapter implements FilesystemAdapter
         $file->setMimeType('application/vnd.google-apps.folder');
 
         $obj = $this->drive->files->create($file, [
-            'fields' => self::GET_FIELDS
+            'fields' => self::GET_FIELDS,
+            'supportsAllDrives' => true,
         ]);
 
         if (!$obj->getId()) {
@@ -530,7 +548,9 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         $patchObj = new DriveFile();
-        $params = [];
+        $params = [
+            'supportsAllDrives' => true,
+        ];
 
         // Moving a file to a different container
         if (!in_array($targetParent->getId(), $sourceFile->file->parents, true)) {
@@ -583,7 +603,9 @@ class DriveAdapter implements FilesystemAdapter
         $newFile = new DriveFile();
         $newFile->setParents([$targetParent->getId()]);
         try {
-            $this->drive->files->copy($sourceFile->getId(), $newFile);
+            $this->drive->files->copy($sourceFile->getId(), $newFile, [
+                'supportsAllDrives' => true,
+            ]);
         } catch (Exception $e) {
             throw new UnableToCopyFile($e->getMessage());
         }
@@ -620,6 +642,11 @@ class DriveAdapter implements FilesystemAdapter
 
     public function limitToRoot(DriveFile $driveFile): void
     {
+        // if the root check is disabled, don't do any lookups
+        if (!$this->limitToRoot) {
+            return;
+        }
+
         $file = $driveFile->getId();
         if ($file === $this->root) {
             return;
@@ -653,7 +680,8 @@ class DriveAdapter implements FilesystemAdapter
 
         try {
             $parent = $this->drive->files->get($fileId, [
-                'fields' => 'id,name,parents'
+                'fields' => 'id,name,parents',
+                'supportsAllDrives' => true,
             ]);
             $parentId = $parent && $parent->parents ?  reset($parent->parents) : null;
             $this->parentMap[$fileId] = $parentId;
