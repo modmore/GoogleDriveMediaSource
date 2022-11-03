@@ -173,7 +173,7 @@ class GoogleDriveMediaSource extends modMediaSource
 
         // Look for auth codes passed in
         if (isset($_REQUEST['code'])) {
-            $this->checkAuthorizationCode($oAuth, $_REQUEST['code']);
+            $properties['refreshToken']['value'] = $this->checkAuthorizationCode($oAuth, $_REQUEST['code']);
         }
 
         if (!$oAuth->getClientId() || !$oAuth->getClientSecret()) {
@@ -287,7 +287,7 @@ class GoogleDriveMediaSource extends modMediaSource
         return $this->client;
     }
 
-    private function checkAuthorizationCode(OAuth2 $oAuth, string $code): void
+    private function checkAuthorizationCode(OAuth2 $oAuth, string $code): ?string
     {
         $oAuth->setCode($code);
 
@@ -295,21 +295,22 @@ class GoogleDriveMediaSource extends modMediaSource
             $oAuth->setGrantType('authorization_code');
             $tokens = $oAuth->fetchAuthToken();
 
+            if (array_key_exists('access_token', $tokens)) {
+                $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens, $tokens['expires_in'], self::$cacheOptions);
+            }
+
             if (array_key_exists('refresh_token', $tokens)) {
-                $properties['refreshToken']['value'] = $tokens['refresh_token'];
                 $this->setProperties([
                     'refreshToken' => $tokens['refresh_token'],
                 ]);
                 $this->save();
-            }
-
-            if (array_key_exists('access_token', $tokens)) {
-                $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens, $tokens['expires_in'], self::$cacheOptions);
+                return $tokens['refresh_token'];
             }
 
         } catch (\Exception $e) {
             $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, '[GoogleDriveMediaSource] Received oAuth error when verifying token: ' . $e->getMessage());
         }
+        return null;
     }
 
     public function getContainerList($path)
