@@ -27,7 +27,7 @@ if (!in_array($options[xPDOTransport::PACKAGE_ACTION], [xPDOTransport::ACTION_IN
 
 $modx->log(\xPDO\xPDO::LOG_LEVEL_INFO, 'Installing/updating dependencies, this may take some time...');
 
-$path = MODX_CORE_PATH . 'components/commerce/';
+$path = MODX_CORE_PATH . 'components/googledrivemediasource/';
 // Tell composer where to look
 putenv("COMPOSER={$path}composer.json");
 putenv("COMPOSER_HOME={$path}.composer");
