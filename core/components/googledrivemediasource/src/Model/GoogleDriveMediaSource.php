@@ -62,7 +62,7 @@ class GoogleDriveMediaSource extends modMediaSource
         $cache = new Pool($this->xpdo, self::$cacheOptions[xPDO::OPT_CACHE_KEY]);
         $adapter = new DriveAdapter($drive, [
             'cache' => $cache,
-            'root' => $properties['root']['value'] ?? '',
+            'root' => $properties['root']['value'] ?? 'root',
             'maxItemsPerLevel' => $properties['maxItemsPerLevel']['value'] ?? 250,
         ]);
         $this->loadFlySystem($adapter);
@@ -416,7 +416,7 @@ class GoogleDriveMediaSource extends modMediaSource
 
         } catch (FilesystemException $e) {
             $this->addError('path', $e->getMessage());
-            $this->xpdo->log(modX::LOG_LEVEL_ERROR, $e->getMessage());
+            $this->xpdo->log(modX::LOG_LEVEL_ERROR, '[GoogleDriveMediaSource] Could not generate container list for ' . htmlentities($path) . ': ' . $e->getMessage());
             return [];
         }
     }
