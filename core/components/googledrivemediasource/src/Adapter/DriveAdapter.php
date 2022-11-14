@@ -83,6 +83,9 @@ class DriveAdapter implements FilesystemAdapter
         } catch (InvalidArgumentException|UnableToRetrieveMetadata $e) {
         }
 
+        if (empty($fileId)) {
+            throw new UnableToRetrieveMetadata('Empty path provided');
+        }
 
         if (isset($this->memoryCache[$fileId])) {
             return $this->memoryCache[$fileId];
