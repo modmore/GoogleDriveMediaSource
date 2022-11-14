@@ -72,6 +72,10 @@ class DriveAdapter implements FilesystemAdapter
         $parent = end($segments) ?: $this->root;
         $parentObj = null;
 
+        if ($fileId === 'root') {
+            throw new UnableToRetrieveMetadata('Cannot load root object');
+        }
+
         try {
             if ($parent !== $this->root && $parent !== $fileId) {
                 $parentObj = $this->get($parent);
@@ -132,7 +136,6 @@ class DriveAdapter implements FilesystemAdapter
 
     /**
      * @param string $path
-     * @param string $query
      * @return array|Directory[]|File[]
      * @throws InvalidArgumentException
      * @throws UnableToRetrieveMetadata
@@ -146,12 +149,15 @@ class DriveAdapter implements FilesystemAdapter
         }
 
         // Load the parent to ensure it is accessible and restricted to root
-        $this->get($parent);
+        try {
+            $this->get($parent);
+        } catch (UnableToRetrieveMetadata $e) {
+            if ($parent !== 'root' || $this->root !== 'root') {
+                throw $e;
+            }
+        }
 
         $cacheKey = 'DIR-' . $this->root . '-' . $parent;
-//        if (empty($query)) {
-//            $cacheKey .= sha1($query);
-//        }
 
         $item = $this->cache ? $this->cache->getItem($cacheKey) : false;
         if ($item && $item->isHit()) {
