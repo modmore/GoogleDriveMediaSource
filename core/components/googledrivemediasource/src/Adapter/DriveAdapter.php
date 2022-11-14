@@ -340,9 +340,7 @@ class DriveAdapter implements FilesystemAdapter
         $mime = $file->mimeType();
 
         if (str_starts_with($mime, 'application/vnd.google-apps')) {
-            $response = $this->drive->files->export($file->getId(), $exportMimeType, [
-                'supportsAllDrives' => true,
-            ]);
+            $response = $this->drive->files->export($file->getId(), $exportMimeType, []);
         }
         else {
             $response = $this->drive->files->get($file->getId(), [
