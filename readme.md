@@ -82,3 +82,16 @@ The **urlPattern** in the media source can then drop the media source ID and be 
 ```
 
 If you want to run it on a subdomain, simply provide the full url (including HTTPS and the domain). 
+
+## Integrations
+
+When using the media source with other extras, you may run into compatibility issues because files and directories are referenced by IDs internally. 
+
+Please do report incompatibilities
+
+### PHPThumb 
+
+For phpthumb support, including the one built into MODX for the image TV, Image+, and others, make sure you have set up the "friendlier URLs" described above with a **full URL**, e.g. `https://site.com/drive/{id}`. Relative URLs do not work.
+
+Next, set `phpthumb_nohotlink_enabled` to `No` to allow phpthumb to create thumbnails for external files.
+
