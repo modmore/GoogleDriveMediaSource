@@ -542,8 +542,8 @@ class GoogleDriveMediaSource extends modMediaSource
             'sid' => $this->get('id'),
             'name' => $file->getName(),
             'cls' => 'icon-' . $this->_fileIcon((string)$file->file->fileExtension, (string)$mime),
-            'original_width' => $original['width'],
-            'original_height' => $original['height'],
+            'original_width' => $original ? $original['width'] : '',
+            'original_height' => $original ? $original['height'] : '',
             // preview
             'preview' => $preview,
             'image' => $preview_image_info['src'] ?? '',
@@ -879,5 +879,10 @@ class GoogleDriveMediaSource extends modMediaSource
             'application/vnd.google-apps.spreadsheet' => 'xls',
             default => 'unknown',
         };
+    }
+
+    public function getBaseUrl($object = '')
+    {
+        return '';
     }
 }
