@@ -78,7 +78,7 @@ class DriveAdapter implements FilesystemAdapter
 
         try {
             if ($parent !== $this->root && $parent !== $fileId) {
-                $parentObj = $this->get($parent);
+                $parentObj = $this->get(implode('/', $segments));
             }
         } catch (InvalidArgumentException|UnableToRetrieveMetadata $e) {
         }
