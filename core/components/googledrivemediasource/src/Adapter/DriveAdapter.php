@@ -454,28 +454,42 @@ class DriveAdapter implements FilesystemAdapter
     public function createDirectory(string $path, Config $config): void
     {
         $segments = explode('/', trim($path, '/'));
-        $name = array_pop($segments);
-        $parent = end($segments) ?: $this->root;
 
-        $file = new DriveFile();
-        $file->setName($name);
-        $file->setParents([$parent]);
-        $file->setMimeType('application/vnd.google-apps.folder');
+        $parent = $this->root;
+        $parentObj = null;
+        $currentPath = $this->root;
+        foreach ($segments as $segment) {
+            $currentPath .= '/' . $segment;
+            try {
+                $segmentFile = $parentObj = $this->get($currentPath);
+                $parent = $segmentFile->getId();
+            } catch (UnableToRetrieveMetadata) {
+                $file = new DriveFile();
+                $file->setName($segment);
+                $file->setParents([$parent]);
+                $file->setMimeType('application/vnd.google-apps.folder');
 
-        $obj = $this->drive->files->create($file, [
-            'fields' => self::GET_FIELDS,
-            'supportsAllDrives' => true,
-        ]);
+                try {
+                    $obj = $this->drive->files->create($file, [
+                        'fields' => self::GET_FIELDS,
+                        'supportsAllDrives' => true,
+                    ]);
 
-        if (!$obj->getId()) {
-            throw new UnableToCreateDirectory(print_r($obj, true));
+                    if ($this->cache) {
+                        $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
+                        unset($this->memoryCache[$parent]);
+                    }
+
+                    $parent = $obj->getId();
+                    $parentObj = $this->convertToFile($obj);
+                } catch (Exception $e) {
+                    throw new UnableToCreateDirectory('Could not create segment ' . $segment . ' in ' . $path . ': ' . $e->getMessage());
+                }
+            }
         }
 
-        $this->lastObj = $this->convertToFile($obj);
-        // Delete the directory listing of the parent from cache
-        if ($this->cache) {
-            $this->cache->deleteItem('DIR-' . $this->root . '-' . $parent);
-            unset($this->memoryCache[$parent]);
+        if ($parentObj instanceof DriveFile) {
+            $this->lastObj = $this->convertToFile($parentObj);
         }
     }
 
