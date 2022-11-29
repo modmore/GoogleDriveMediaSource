@@ -29,7 +29,7 @@ if (!defined('MOREPROVIDER_BUILD')) {
     define('PKG_NAME', 'GoogleDriveMediaSource');
     define('PKG_NAMESPACE', 'googledrivemediasource');
     define('PKG_VERSION', '1.0.0');
-    define('PKG_RELEASE', 'dev8');
+    define('PKG_RELEASE', 'dev9');
 
     /* load modx */
     require_once dirname(__DIR__) . '/config.core.php';

@@ -222,6 +222,7 @@ class DriveAdapter implements FilesystemAdapter
                 'pageToken' => $pageToken,
                 'fields' => self::LIST_FIELDS,
                 'supportsAllDrives' => true,
+                'includeItemsFromAllDrives' => true,
                 'corpora' => $this->corpora,
             ];
 

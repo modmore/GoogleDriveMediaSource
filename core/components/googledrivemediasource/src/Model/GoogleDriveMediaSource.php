@@ -233,6 +233,24 @@ class GoogleDriveMediaSource extends modMediaSource
                     $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, 'Received error loading shared team drives for Google Drive Media Source: ' . $e->getMessage());
                     return parent::prepareProperties($properties);
                 }
+
+                try {
+                    $files = $drive->files->listFiles([
+                        'q' => "trashed = false and sharedWithMe and mimeType = 'application/vnd.google-apps.folder'",
+                        'pageSize' => 100,
+                    ]);
+
+                    foreach ($files as $file) {
+                        $properties['root']['options'][] = [
+                            'name' => '[Shared] ' . $file->getName(),
+                            'value' => $file->getId(),
+                        ];
+                    }
+
+                } catch (Exception $e) {
+                    $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, 'Received error loading shared folders for Google Drive Media Source: ' . $e->getMessage());
+                    return parent::prepareProperties($properties);
+                }
             }
 
             return parent::prepareProperties($properties);
