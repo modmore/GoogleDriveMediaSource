@@ -24,9 +24,10 @@ use Psr\Cache\InvalidArgumentException;
 
 class DriveAdapter implements FilesystemAdapter
 {
-    protected const DIRECTORY_MIME = 'application/vnd.google-apps.folder';
-    protected const LIST_FIELDS = 'files(id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension),nextPageToken';
-    protected const GET_FIELDS = 'id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension';
+    public const DIRECTORY_MIME = 'application/vnd.google-apps.folder';
+    public const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut';
+    public const LIST_FIELDS = 'files(id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension,shortcutDetails,sharedWithMeTime),nextPageToken';
+    public const GET_FIELDS = 'id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension,shortcutDetails,sharedWithMeTime';
 
     private Drive $drive;
     private ?CacheItemPoolInterface $cache = null;

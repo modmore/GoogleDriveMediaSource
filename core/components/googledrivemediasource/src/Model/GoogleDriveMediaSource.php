@@ -199,15 +199,46 @@ class GoogleDriveMediaSource extends modMediaSource
                 ]);
 
                 try {
-                    $folders = $adapter->listContents('', false);
+                    $files = $drive->files->listFiles([
+                        'q' => "trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.shortcut') and (sharedWithMe or parents = 'root')",
+                        'pageSize' => 100,
+                        'fields' => DriveAdapter::LIST_FIELDS,
+                    ]);
 
-                    foreach ($folders as $folder) {
-                        if (!$folder->isDir()) {
+                    /** @var Drive\DriveFile $file */
+                    foreach ($files as $file) {
+                        $isShortcut = false;
+
+                        // Follow Drive shortcuts so non-root or shared folders can be used as root
+                        if ($file->mimeType === DriveAdapter::SHORTCUT_MIME && $file->getShortcutDetails()) {
+                            try {
+                                $shortcutId = $file->getShortcutDetails()->getTargetId();
+                                $shortcutTarget = $adapter->get($shortcutId);
+                                if ($shortcutTarget->isDir()) {
+                                    $file = $shortcutTarget->file;
+                                    $isShortcut = true;
+                                }
+                            } catch (Exception $e) {
+                                $this->xpdo->log(xPDO::LOG_LEVEL_ERROR,
+                                    'Google Drive Media Source received ' . get_class($e) . ' following shortcut ' . $file->name . ' to ' . $shortcutId);
+                            }
+                        }
+
+                        // We only want directories at this point
+                        if ($file->mimeType !== DriveAdapter::DIRECTORY_MIME) {
                             continue;
                         }
+
+                        $name = $file->name;
+                        if (!empty($file->sharedWithMeTime)) {
+                            $name = '[Shared] ' . $name;
+                        }
+                        if ($isShortcut) {
+                            $name = '[Shortcut] ' . $name;
+                        }
                         $properties['root']['options'][] = [
-                            'name' => $folder->getName(),
-                            'value' => $folder->path(),
+                            'name' => $name,
+                            'value' => $file->id,
                         ];
                     }
 
@@ -231,24 +262,6 @@ class GoogleDriveMediaSource extends modMediaSource
 
                 } catch (Exception $e) {
                     $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, 'Received error loading shared team drives for Google Drive Media Source: ' . $e->getMessage());
-                    return parent::prepareProperties($properties);
-                }
-
-                try {
-                    $files = $drive->files->listFiles([
-                        'q' => "trashed = false and sharedWithMe and mimeType = 'application/vnd.google-apps.folder'",
-                        'pageSize' => 100,
-                    ]);
-
-                    foreach ($files as $file) {
-                        $properties['root']['options'][] = [
-                            'name' => '[Shared] ' . $file->getName(),
-                            'value' => $file->getId(),
-                        ];
-                    }
-
-                } catch (Exception $e) {
-                    $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, 'Received error loading shared folders for Google Drive Media Source: ' . $e->getMessage());
                     return parent::prepareProperties($properties);
                 }
             }
@@ -281,7 +294,7 @@ class GoogleDriveMediaSource extends modMediaSource
         return $oAuth;
     }
 
-    private function client(?OAuth2 $oauth = null): Client
+    public function client(?OAuth2 $oauth = null): Client
     {
         if ($this->client) {
             return $this->client;
