@@ -26,8 +26,8 @@ class DriveAdapter implements FilesystemAdapter
 {
     public const DIRECTORY_MIME = 'application/vnd.google-apps.folder';
     public const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut';
-    public const LIST_FIELDS = 'files(id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension,shortcutDetails,sharedWithMeTime),nextPageToken';
-    public const GET_FIELDS = 'id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension,shortcutDetails,sharedWithMeTime';
+    public const LIST_FIELDS = 'files(id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,thumbnailLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension,shortcutDetails,sharedWithMeTime),nextPageToken';
+    public const GET_FIELDS = 'id,mimeType,createdTime,modifiedTime,name,parents,permissions,size,webContentLink,webViewLink,iconLink,thumbnailLink,contentHints,imageMediaMetadata,capabilities,exportLinks,resourceKey,fileExtension,shortcutDetails,sharedWithMeTime';
 
     private Drive $drive;
     private ?CacheItemPoolInterface $cache = null;

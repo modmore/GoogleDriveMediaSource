@@ -815,8 +815,9 @@ class GoogleDriveMediaSource extends modMediaSource
 
     protected function buildManagerImagePreview($path, $ext, $width, $height, $bases, $properties = []): array
     {
+        $file = $this->adapter->get($path);
         return [
-            'src' => $this->getObjectUrl($path),
+            'src' => $file->file->getThumbnailLink(),
             'width' => $width,
             'height' => $height,
         ];
