@@ -285,7 +285,8 @@ class GoogleDriveMediaSource extends modMediaSource
             'refreshToken' => $properties['refreshToken']['value'] ?? '',
         ]);
 
-        if ($tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'), self::$cacheOptions)) {
+        $tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'), self::$cacheOptions);
+        if (!empty($tokens) && is_array($tokens)) {
             $oAuth->updateToken($tokens);
         }
 
