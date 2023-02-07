@@ -1,5 +1,3 @@
-Proprietary until project completed and paid in full. Afterwards, MIT as included below.
-
 MIT License
 
 Copyright (c) 2022 modmore
