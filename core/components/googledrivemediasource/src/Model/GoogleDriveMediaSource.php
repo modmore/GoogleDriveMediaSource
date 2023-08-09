@@ -306,14 +306,17 @@ class GoogleDriveMediaSource extends modMediaSource
             'client_id' => $oauth->getClientId(),
             'client_secret' => $oauth->getClientSecret(),
         ]);
-        if ($tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'), self::$cacheOptions)) {
+
+        $tokens = $this->xpdo->getCacheManager()->get('access_token_' . $this->get('id'), self::$cacheOptions);
+        if (!empty($tokens) && is_array($tokens)) {
             $this->client->setAccessToken($tokens);
         }
         else {
             $tokens = $this->client->fetchAccessTokenWithRefreshToken($oauth->getRefreshToken());
-//            var_dump($tokens);exit();
-
-            $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens, $tokens['expires_in'] - 60, self::$cacheOptions);
+            if (!empty($tokens) && is_array($tokens)) {
+                $this->xpdo->getCacheManager()->set('access_token_' . $this->get('id'), $tokens,
+                    $tokens['expires_in'] - 60, self::$cacheOptions);
+            }
         }
 
         return $this->client;
