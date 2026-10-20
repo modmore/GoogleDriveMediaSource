@@ -13,7 +13,7 @@
         }
     },
     "replace": {
-        "league/flysystem": "^2.0",
+        "league/flysystem": "^2.0 || ^3.0",
         "guzzlehttp/guzzle": "^7.3",
         "guzzlehttp/psr7": "^2.0",
         "psr/http-client": "^1.0",

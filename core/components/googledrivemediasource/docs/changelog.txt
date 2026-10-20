@@ -1,3 +1,21 @@
+Google Drive Media Source 1.1.0-pl
+----------------------------------
+Released on ____
+
+- Update Adapter to v3 Flysystem contract for MODX 3.3 / modxcms/revolution#17024
+
+Dependencies:
+- phpseclib/phpseclib removed (installed version was 3.0.17)
+- paragonie/random_compat removed (installed version was v9.99.100)
+- paragonie/constant_time_encoding removed (installed version was v2.6.3)
+- psr/log updated from 3.0.0 to 3.0.2 patch
+- monolog/monolog updated from 2.8.0 to 3.12.1
+- firebase/php-jwt updated from v6.3.1 to v7.2.1
+- google/auth updated from v1.23.1 to v1.55.2
+- google/apiclient-services updated from v0.272.1 to v0.464.0
+- google/apiclient updated from v2.12.6 to v2.20.1
+- league/mime-type-detection updated from 1.11.0 to 1.17.0 minor
+
 Google Drive Media Source 1.0.1-pl
 ----------------------------------
 Released on 2023-08-09

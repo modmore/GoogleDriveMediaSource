@@ -9,7 +9,6 @@ use GuzzleHttp\Psr7\Utils;
 use League\Flysystem\Config;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
-use League\Flysystem\StorageAttributes;
 use League\Flysystem\UnableToCopyFile;
 use League\Flysystem\UnableToCreateDirectory;
 use League\Flysystem\UnableToDeleteDirectory;
@@ -247,7 +246,21 @@ class DriveAdapter implements FilesystemAdapter
     public function fileExists(string $path): bool
     {
         try {
-            return $this->get($path) instanceof StorageAttributes;
+            return $this->get($path) instanceof File;
+        } catch (UnableToRetrieveMetadata) {
+            return false;
+        }
+    }
+
+    public function directoryExists(string $path): bool
+    {
+        $normalized = trim($path, '/');
+        if ($normalized === '' || $normalized === 'root' || $normalized === $this->root) {
+            return true;
+        }
+
+        try {
+            return $this->get($path) instanceof Directory;
         } catch (UnableToRetrieveMetadata) {
             return false;
         }
