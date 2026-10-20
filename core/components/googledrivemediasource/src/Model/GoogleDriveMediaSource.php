@@ -152,6 +152,20 @@ class GoogleDriveMediaSource extends modMediaSource
                 'options' => '',
                 'value' => '',
             ],
+            'localSaveMediaSource' => [
+                'name' => 'localSaveMediaSource',
+                'desc' => $this->xpdo->lexicon('googledrivemediasource.localSaveMediaSource_desc'),
+                'type' => 'numberfield',
+                'options' => [],
+                'value' => 0,
+            ],
+            'localSavePath' => [
+                'name' => 'localSavePath',
+                'desc' => $this->xpdo->lexicon('googledrivemediasource.localSavePath_desc'),
+                'type' => 'textfield',
+                'options' => [],
+                'value' => 'assets/components/googledrivemediasource/cache/',
+            ],
         ];
     }
 
@@ -920,5 +934,109 @@ class GoogleDriveMediaSource extends modMediaSource
     public function getBaseUrl($object = '')
     {
         return '';
+    }
+
+    /**
+     * Resolve a Google Drive proxy URL to a local file: fetch from Drive, save to local media source,
+     * and return the local URL. Useful when storing TV values so they point to local files instead of the proxy.
+     *
+     * @param string $gdUrl URL like /assets/components/googledrivemediasource/?s=3&id=xxx
+     */
+    public function prepareSrcForThumb($src): ?string
+    {
+        $query = parse_url($src, PHP_URL_QUERY);
+        if (empty($query)) {
+            $urlParts = explode('/', $src);
+            $fileId = end($urlParts);
+        }else{
+            parse_str($query, $params);
+            if(!empty($params)){
+                $fileId = $params['id'];
+            }
+        }
+
+        try {
+            $file = $this->getDriveFile($fileId);
+        } catch (InvalidArgumentException | UnableToRetrieveMetadata $e) {
+            $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, '[GoogleDriveMediaSource] resolveToLocalUrl: ' . $e->getMessage());
+            return null;
+        }
+
+        if ($file instanceof Directory) {
+            return null;
+        }
+
+        return $this->saveLocalFile($file);
+
+    }
+
+    /*
+     * Save file to local Media Source
+     *
+     * @param object $file File object
+     */
+    public function saveLocalFile($file){
+
+        $properties = $this->getPropertyListWithDefaults();
+        $targetSourceId = (int)$this->getOption('localSaveMediaSource', $properties, 1);
+        $targetDir = $this->getOption('localSavePath', $properties, 'assets/components/googledrivemediasource/cache/');
+        /** @var modMediaSource|null $targetSource */
+        $targetSource = $this->xpdo->getObject(modMediaSource::class, ['id' => $targetSourceId]);
+        if (!$targetSource || !$targetSource->initialize()) {
+            $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, '[GoogleDriveMediaSource] resolveToLocalUrl: target source ' . $targetSourceId . ' not found.');
+            return null;
+        }
+
+
+        $fileId = $file->getId();
+        $fileName = $file->getName();
+        $mime = $file->mimeType();
+        $adapter = $this->getAdapter();
+        $exportFormat = '';
+        $ext = '';
+        if (str_starts_with($mime, 'application/vnd.google-apps')) {
+            $exportFormat = match ($mime) {
+                'application/vnd.google-apps.drawing' => 'image/png',
+                'application/vnd.google-apps.photo' => 'image/png',
+                default => 'application/pdf',
+            };
+            $ext = $exportFormat === 'image/png' ? 'png' : 'pdf';
+            if (str_ends_with(strtolower($fileName), '.png') || str_ends_with(strtolower($fileName), '.pdf')) {
+
+            }
+            $fileName = pathinfo($fileName, PATHINFO_FILENAME) . '.' . $ext;
+        }
+        if(!$ext) $ext = pathinfo($fileName, PATHINFO_EXTENSION) ?: $ext;
+
+        $savePath = "$targetDir$fileId.$ext";
+        $fileSystem = $targetSource->getFilesystem();
+        $this->xpdo->log(1, "Saving image from Google: $fileId to $targetDir");
+        try {
+            if ($fileSystem->fileExists($savePath)) {
+                $properties = $targetSource->getProperties(true);
+                $baseUrl = $properties['baseUrl']['value'] ?? '';
+                $urlIsRelative = !empty($properties['baseUrlRelative']['value']);
+                $fullUrl = $urlIsRelative
+                    ? $this->xpdo->getOption('base_url', null, MODX_BASE_URL) . $baseUrl . ltrim($savePath, '/')
+                    : rtrim($baseUrl, '/') . '/' . ltrim($savePath, '/');
+                return $fullUrl;
+            }
+
+            $content = $adapter->read($fileId, $exportFormat);
+            $this->xpdo->log(1, "Saving image from Google: $fileId to $targetDir");
+            $fileSystem->write($savePath, $content);
+        } catch (FilesystemException | \Throwable $e) {
+            $this->xpdo->log(xPDO::LOG_LEVEL_ERROR, '[GoogleDriveMediaSource] resolveToLocalUrl write failed: ' . $e->getMessage());
+            return null;
+        }
+
+        $properties = $targetSource->getProperties(true);
+        $baseUrl = $properties['baseUrl']['value'] ?? '';
+        $urlIsRelative = !empty($properties['baseUrlRelative']['value']);
+        $fullUrl = $urlIsRelative
+            ? $this->xpdo->getOption('base_url', null, MODX_BASE_URL) . $baseUrl . ltrim($savePath, '/')
+            : rtrim($baseUrl, '/') . '/' . ltrim($savePath, '/');
+
+        return $fullUrl;
     }
 }

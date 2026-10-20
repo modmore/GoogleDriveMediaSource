@@ -33,6 +33,7 @@ class RenderFile extends Processor
         $fileId = (string)$this->getProperty('id');
         try {
             $this->file = $this->source->getDriveFile($fileId);
+            $this->source->saveLocalFile($this->file);
         } catch (Throwable) {
             $this->error('File not found', 404);
         }
